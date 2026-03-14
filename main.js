@@ -1,4 +1,13 @@
 // ============================================
+// FIREBASE IMPORTS
+// ============================================
+
+import { auth, db, storage } from './firebase-config.js';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes } from 'firebase/storage';
+
+// ============================================
 // PFP CONFIGURATION
 // ============================================
 
@@ -190,33 +199,129 @@ function validateSignupForm() {
 }
 
 // ============================================
-// 4. FORM SUBMISSION
+// 4. FIREBASE AUTH - LOGIN
 // ============================================
 
-function handleLogin() {
+async function handleLogin() {
     if (!validateLoginForm()) return;
 
     const username = loginUsername.value.trim();
     const password = loginPassword.value;
 
-    console.log('Login attempt:', { username, password });
-    alert(`Login attempt for user: ${username}`);
-    
-    // TODO: Connect to Firebase Auth
+    try {
+        // Firebase Auth uses email, so we'll use username@demodotcom.local as the email
+        const email = `${username}@demodotcom.local`;
+        
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        console.log('✓ Login successful:', user.uid);
+        alert(`Welcome back, ${username}!`);
+        
+        // TODO: Redirect to dashboard
+    } catch (error) {
+        console.error('Login error:', error.message);
+        alert(`Login failed: ${error.message}`);
+    }
 }
 
-function handleSignup() {
+// ============================================
+// 5. FIREBASE AUTH - SIGNUP
+// ============================================
+
+async function handleSignup() {
     if (!validateSignupForm()) return;
 
     const username = signupUsername.value.trim();
     const password = signupPassword.value;
     const pfp = selectedPFP || 'uploaded';
 
-    console.log('Signup attempt:', { username, password, pfp });
-    alert(`Signup successful for: ${username}! (demo mode)`);
-    
-    // TODO: Connect to Firebase Auth + Storage
+    try {
+        // Firebase Auth uses email, so we'll use username@demodotcom.local as the email
+        const email = `${username}@demodotcom.local`;
+        
+        // Create user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        console.log('✓ User created:', user.uid);
+        
+        // Upload PFP if custom image
+        let pfpURL = null;
+        if (uploadedPFP) {
+            pfpURL = await uploadPFPToStorage(user.uid, uploadedPFP);
+        }
+        
+        // Save user data to Firestore
+        await saveUserToFirestore(user.uid, username, pfp, pfpURL);
+        
+        console.log('✓ User data saved to Firestore');
+        alert(`Signup successful, ${username}! Welcome!`);
+        
+        // Clear form
+        signupUsername.value = '';
+        signupPassword.value = '';
+        selectedPFP = null;
+        uploadedPFP = null;
+        
+        // TODO: Redirect to dashboard
+    } catch (error) {
+        console.error('Signup error:', error.message);
+        alert(`Signup failed: ${error.message}`);
+    }
 }
+
+// ============================================
+// 6. FIREBASE STORAGE - UPLOAD PFP
+// ============================================
+
+async function uploadPFPToStorage(userId, imageData) {
+    try {
+        // Convert data URL to blob
+        const response = await fetch(imageData);
+        const blob = await response.blob();
+        
+        // Create storage reference
+        const storageRef = ref(storage, `groups/group1/pfps/${userId}.jpg`);
+        
+        // Upload file
+        await uploadBytes(storageRef, blob);
+        
+        console.log('✓ PFP uploaded to Cloud Storage');
+        return storageRef.fullPath;
+    } catch (error) {
+        console.error('PFP upload error:', error.message);
+        throw error;
+    }
+}
+
+// ============================================
+// 7. FIRESTORE - SAVE USER DATA
+// ============================================
+
+async function saveUserToFirestore(userId, username, pfp, pfpURL) {
+    try {
+        const userRef = doc(db, 'groups/group1/users', userId);
+        
+        await setDoc(userRef, {
+            username: username,
+            email: `${username}@demodotcom.local`,
+            pfp: pfp,
+            pfpURL: pfpURL,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+        
+        console.log('✓ User saved to Firestore');
+    } catch (error) {
+        console.error('Firestore error:', error.message);
+        throw error;
+    }
+}
+
+// ============================================
+// 8. FORM SUBMISSION
+// ============================================
 
 function handleEnterKey(e) {
     if (e.key !== 'Enter') return;
@@ -238,7 +343,7 @@ function initializeFormSubmission() {
 }
 
 // ============================================
-// 5. INITIALIZATION
+// 9. INITIALIZATION
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
