@@ -1,177 +1,254 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+// ============================================
+// PFP CONFIGURATION
+// ============================================
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyASpTOH6fqNmzBqQXwKe7W_2hIG9DJmVME",
-  authDomain: "demodotcom-9e2ea.firebaseapp.com",
-  databaseURL: "https://demodotcom-9e2ea-default-rtdb.firebaseio.com",
-  projectId: "demodotcom-9e2ea",
-  storageBucket: "demodotcom-9e2ea.firebasestorage.app",
-  messagingSenderId: "558126877181",
-  appId: "1:558126877181:web:f74492772a187d8c173194"
-};
+const PFP_LIST = [
+    'pfp1.jpg', 'pfp2.jpg', 'pfp3.jpg', 'pfp4.jpg', 'pfp5.jpg',
+    'pfp6.jpg', 'pfp7.jpg', 'pfp8.jpg', 'pfp9.jpg', 'pfp10.jpg',
+    'pfp11.jpg', 'pfp12.jpg', 'pfp13.jpg', 'pfp14.jpg', 'pfp15.jpg',
+    'pfp16.jpg', 'pfp17.jpg', 'pfp18.jpg', 'pfp19.jpg'
+];
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-console.log('Firebase initialized');
-
-// Set background image immediately when script loads
-const mainContainer = document.getElementById('mainContainer');
-console.log('mainContainer element:', mainContainer);
-
-if (mainContainer) {
-    const backgroundImage = window.SITE_CONFIG?.backgroundImage || '/images/background.jpg';
-    console.log('Setting background image to:', backgroundImage);
-    mainContainer.style.backgroundImage = `url('${backgroundImage}')`;
+function loadPFPGrid() {
+    const pfpGrid = document.getElementById('pfpGrid');
+    
+    // Load all PFP images
+    PFP_LIST.forEach(pfp => {
+        const container = document.createElement('div');
+        container.className = 'pfp-container';
+        container.dataset.pfp = pfp;
+        
+        const img = document.createElement('img');
+        img.src = `./images/pfps/${pfp}`;
+        img.alt = pfp;
+        
+        container.appendChild(img);
+        pfpGrid.appendChild(container);
+    });
+    
+    // Add upload button as 20th item
+    const uploadContainer = document.createElement('div');
+    uploadContainer.className = 'upload-pfp-container';
+    uploadContainer.id = 'uploadPFPButton';
+    uploadContainer.innerHTML = '<span>+</span>';
+    
+    pfpGrid.appendChild(uploadContainer);
+    
+    console.log(`✓ Loaded ${PFP_LIST.length} PFP options + upload button`);
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    // DOM Elements
-    const loginToggle = document.getElementById('loginToggle');
-    const signupToggle = document.getElementById('signupToggle');
-    const loginInputs = document.getElementById('loginInputs');
-    const signupInputs = document.getElementById('signupInputs');
-    const pfpSelection = document.getElementById('pfpSelection');
-    const pfpContainers = document.querySelectorAll('.pfp-container');
-    const uploadPFP = document.getElementById('uploadPFP');
-    const pfpUpload = document.getElementById('pfpUpload');
-    
-    let selectedPFP = null;
-    let uploadedPFP = null;
+// ============================================
+// DOM ELEMENT REFERENCES
+// ============================================
 
-    // Toggle between Login and Signup views
-    function setActiveView(view) {
-        if (view === 'login') {
-            loginToggle.classList.add('active');
-            signupToggle.classList.remove('active');
-            loginInputs.style.display = 'flex';
-            signupInputs.style.display = 'none';
-            pfpSelection.style.display = 'none';
-        } else {
-            signupToggle.classList.add('active');
-            loginToggle.classList.remove('active');
-            loginInputs.style.display = 'none';
-            signupInputs.style.display = 'flex';
-            pfpSelection.style.display = 'flex';
-        }
+const mainContainer = document.getElementById('mainContainer');
+const loginToggle = document.getElementById('loginToggle');
+const signupToggle = document.getElementById('signupToggle');
+const loginInputs = document.getElementById('loginInputs');
+const signupInputs = document.getElementById('signupInputs');
+const pfpSelection = document.getElementById('pfpSelection');
+const pfpUpload = document.getElementById('pfpUpload');
+
+const loginUsername = document.getElementById('loginUsername');
+const loginPassword = document.getElementById('loginPassword');
+const signupUsername = document.getElementById('signupUsername');
+const signupPassword = document.getElementById('signupPassword');
+
+let pfpContainers; // Will be set after PFPs load
+let uploadPFPButton; // Will be set after PFPs load
+
+// ============================================
+// STATE VARIABLES
+// ============================================
+
+let selectedPFP = null;
+let uploadedPFP = null;
+
+// ============================================
+// 1. VIEW MANAGEMENT
+// ============================================
+
+function setActiveView(view) {
+    if (view === 'login') {
+        loginToggle.classList.add('active');
+        signupToggle.classList.remove('active');
+        loginInputs.style.display = 'flex';
+        signupInputs.style.display = 'none';
+        pfpSelection.style.display = 'none';
+    } else {
+        signupToggle.classList.add('active');
+        loginToggle.classList.remove('active');
+        loginInputs.style.display = 'none';
+        signupInputs.style.display = 'flex';
+        pfpSelection.style.display = 'flex';
     }
+}
 
-    // Event listeners for toggle buttons
+function initializeViews() {
     loginToggle.addEventListener('click', () => setActiveView('login'));
     signupToggle.addEventListener('click', () => setActiveView('signup'));
+    setActiveView('login');
+}
 
-    // Handle PFP selection
+// ============================================
+// 2. PFP SELECTION
+// ============================================
+
+function initializePFPSelection() {
+    pfpContainers = document.querySelectorAll('.pfp-container');
+    uploadPFPButton = document.getElementById('uploadPFPButton');
+    
     pfpContainers.forEach(container => {
         container.addEventListener('click', function() {
-            // Remove selected class from all PFPs and upload container
+            // Deselect all
             pfpContainers.forEach(p => p.classList.remove('selected'));
-            uploadPFP.classList.remove('selected');
+            uploadPFPButton.classList.remove('selected');
             
-            // Add selected class to clicked PFP
+            // Select clicked PFP
             this.classList.add('selected');
             selectedPFP = this.dataset.pfp;
-            uploadedPFP = null; // Clear any uploaded PFP
+            uploadedPFP = null;
+            
+            console.log('Selected PFP:', selectedPFP);
         });
     });
+    
+    console.log('✓ PFP selection initialized');
+}
 
-    // Handle PFP upload
-    uploadPFP.addEventListener('click', function() {
+function initializePFPUpload() {
+    uploadPFPButton = document.getElementById('uploadPFPButton');
+    
+    uploadPFPButton.addEventListener('click', () => {
         pfpUpload.click();
     });
 
-    pfpUpload.addEventListener('change', function(e) {
+    pfpUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                // Remove selected class from all PFPs
+            reader.onload = (event) => {
+                // Deselect all PFPs
                 pfpContainers.forEach(p => p.classList.remove('selected'));
                 
-                // Add selected class to upload container
-                uploadPFP.classList.add('selected');
-                
-                // Change the + to a checkmark
-                uploadPFP.innerHTML = '<span>✓</span>';
+                // Mark upload as selected
+                uploadPFPButton.classList.add('selected');
+                uploadPFPButton.innerHTML = '<span>✓</span>';
                 
                 selectedPFP = null;
-                uploadedPFP = e.target.result;
+                uploadedPFP = event.target.result;
+                
+                console.log('Uploaded PFP');
             };
             reader.readAsDataURL(file);
         }
     });
+    
+    console.log('✓ PFP upload initialized');
+}
 
-    // Handle Enter key for form submission
-    function handleEnterKey(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            
-            if (loginToggle.classList.contains('active')) {
-                // Login logic
-                const username = document.getElementById('loginUsername').value;
-                const password = document.getElementById('loginPassword').value;
-                
-                if (username && password) {
-                    console.log('Login attempt:', { username, password });
-                    alert(`Login attempt for user: ${username}`);
-                } else {
-                    alert('Please enter both username and password');
-                }
-            } else {
-                // Signup logic
-                const username = document.getElementById('signupUsername').value;
-                const password = document.getElementById('signupPassword').value;
-                
-                // Basic validation
-                if (!username || !password) {
-                    alert('Please enter both username and password');
-                    return;
-                }
-                
-                if (password.length < 6) {
-                    alert('Password must be at least 6 characters');
-                    return;
-                }
-                
-                // Check if PFP is selected
-                if (!selectedPFP && !uploadedPFP) {
-                    alert('Please select or upload a profile picture');
-                    return;
-                }
-                
-                console.log('Signup attempt:', { 
-                    username, 
-                    password,
-                    pfp: selectedPFP || 'uploaded'
-                });
-                
-                alert(`Signup successful for: ${username}! (demo mode)`);
-            }
-        }
+// ============================================
+// 3. FORM VALIDATION
+// ============================================
+
+function validateLoginForm() {
+    const username = loginUsername.value.trim();
+    const password = loginPassword.value;
+
+    if (!username) {
+        alert('Please enter a username');
+        return false;
     }
+    if (!password) {
+        alert('Please enter a password');
+        return false;
+    }
+    return true;
+}
 
-    // Add enter key listeners to all inputs
+function validateSignupForm() {
+    const username = signupUsername.value.trim();
+    const password = signupPassword.value;
+
+    if (!username) {
+        alert('Please enter a username');
+        return false;
+    }
+    if (!password) {
+        alert('Please enter a password');
+        return false;
+    }
+    if (password.length < 6) {
+        alert('Password must be at least 6 characters');
+        return false;
+    }
+    if (!selectedPFP && !uploadedPFP) {
+        alert('Please select or upload a profile picture');
+        return false;
+    }
+    return true;
+}
+
+// ============================================
+// 4. FORM SUBMISSION
+// ============================================
+
+function handleLogin() {
+    if (!validateLoginForm()) return;
+
+    const username = loginUsername.value.trim();
+    const password = loginPassword.value;
+
+    console.log('Login attempt:', { username, password });
+    alert(`Login attempt for user: ${username}`);
+    
+    // TODO: Connect to Firebase Auth
+}
+
+function handleSignup() {
+    if (!validateSignupForm()) return;
+
+    const username = signupUsername.value.trim();
+    const password = signupPassword.value;
+    const pfp = selectedPFP || 'uploaded';
+
+    console.log('Signup attempt:', { username, password, pfp });
+    alert(`Signup successful for: ${username}! (demo mode)`);
+    
+    // TODO: Connect to Firebase Auth + Storage
+}
+
+function handleEnterKey(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+
+    if (loginToggle.classList.contains('active')) {
+        handleLogin();
+    } else {
+        handleSignup();
+    }
+}
+
+function initializeFormSubmission() {
     document.querySelectorAll('input').forEach(input => {
         input.addEventListener('keypress', handleEnterKey);
     });
+    
+    console.log('✓ Form submission initialized');
+}
 
-    // Password masking effect
-    const passwordInputs = document.querySelectorAll('input[type="password"]');
-    passwordInputs.forEach(input => {
-        input.addEventListener('input', function(e) {
-            const value = this.value;
-            if (value.length > 0) {
-                this.dataset.realValue = value;
-            }
-        });
-    });
+// ============================================
+// 5. INITIALIZATION
+// ============================================
 
-    // Initialize with login view
-    setActiveView('login');
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('✓ DOM loaded');
+    
+    loadPFPGrid();
+    initializeViews();
+    initializePFPSelection();
+    initializePFPUpload();
+    initializeFormSubmission();
+    
+    console.log('✓ All systems initialized');
 });
