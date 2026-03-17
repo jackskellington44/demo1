@@ -18,9 +18,30 @@
         <!-- Post form overlay (hidden by default, opens on right-click) -->
         <div class="post-form-overlay" id="postFormOverlay" style="display: none;">
             <div class="post-form" id="postForm">
-                <input type="file" id="postImageInput" accept="image/*">
-                <button id="postSubmitBtn">submit</button>
-                <button id="postCancelBtn">cancel</button>
+
+                <!-- Title input -->
+                <input type="text" class="post-form-title" id="postTitle" placeholder="title" maxlength="75" autocomplete="off">
+
+                <!-- Category dropdown (wired up later) -->
+                <select class="post-form-category" id="postCategory" disabled>
+                    <option value="">category (coming soon)</option>
+                </select>
+
+                <!-- File upload -->
+                <label class="post-form-file-label" id="postFileLabel">
+                    <span id="postFileName">choose file</span>
+                    <input type="file" id="postFileInput" accept="image/*">
+                </label>
+
+                <!-- Text input (wired up later) -->
+                <textarea class="post-form-text" id="postText" placeholder="text (coming soon)" disabled></textarea>
+
+                <!-- Buttons -->
+                <div class="post-form-buttons">
+                    <button id="postSubmitBtn">submit</button>
+                    <button id="postCancelBtn">cancel</button>
+                </div>
+
             </div>
         </div>
 

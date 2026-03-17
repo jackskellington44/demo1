@@ -279,6 +279,7 @@ input[type=number]::-webkit-outer-spin-button {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    padding-bottom: 40px;
 }
 
 /* === 10.0 POST FORM OVERLAY === */
@@ -300,16 +301,79 @@ input[type=number]::-webkit-outer-spin-button {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    align-items: center;
+    align-items: stretch;
+    width: 400px;
 }
 
-.post-form input[type="file"] {
-    color: white;
+.post-form-title {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: var(--font-size-lg);
     font-family: inherit;
-    font-size: var(--font-size-md);
+    outline: none;
+    padding: 5px 0;
 }
 
-.post-form button {
+.post-form-title::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.post-form-category {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.3);
+    font-size: var(--font-size-md);
+    font-family: inherit;
+    outline: none;
+    padding: 5px 0;
+    cursor: not-allowed;
+}
+
+.post-form-file-label {
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: var(--font-size-md);
+    font-family: inherit;
+    cursor: pointer;
+    padding: 5px 0;
+}
+
+.post-form-file-label:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.post-form-file-label input[type="file"] {
+    display: none;
+}
+
+.post-form-text {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.3);
+    font-size: var(--font-size-md);
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    height: 60px;
+    padding: 5px 0;
+    cursor: not-allowed;
+}
+
+.post-form-text::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.post-form-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-end;
+}
+
+.post-form-buttons button {
     background: transparent;
     border: none;
     color: rgba(255, 255, 255, 0.6);
@@ -318,10 +382,100 @@ input[type=number]::-webkit-outer-spin-button {
     cursor: pointer;
     transition: opacity 0.2s ease, text-shadow 0.2s ease;
     opacity: 0.7;
+    padding: 0;
 }
 
-.post-form button:hover {
+.post-form-buttons button:hover {
     opacity: 1;
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
     color: rgba(255, 255, 255, 0.9);
+}
+
+/* === 11.0 POST CARDS === */
+.post-card {
+    display: flex;
+    flex-direction: column;
+    max-width: 600px;
+}
+
+/* === 11.1 POST CARD CONTENT === */
+.post-card-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.post-title {
+    font-size: var(--font-size-lg);
+    color: white;
+    line-height: 1.2;
+}
+
+.post-body {
+    font-size: calc(var(--font-size-lg) / 2);
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.4;
+}
+
+.post-image {
+    width: 100%;
+    display: block;
+}
+
+/* === 11.2 POST LAYOUT VARIANTS === */
+.post-layout-title-text .post-title {
+    margin-bottom: 8px;
+}
+
+.post-layout-title-visual .post-title {
+    margin-bottom: 8px;
+}
+
+.post-layout-title-visual-text .post-title {
+    margin-bottom: 8px;
+}
+
+.post-visual-text-row {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+}
+
+.post-visual-text-row .post-image {
+    width: 50%;
+    object-fit: cover;
+}
+
+.post-visual-text-row .post-body {
+    width: 50%;
+}
+
+/* === 11.3 POST FOOTER === */
+.post-footer {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding-top: 8px;
+}
+
+.post-footer-pfp {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.post-footer-username {
+    font-size: var(--font-size-sm);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.post-footer-filename {
+    font-size: var(--font-size-sm);
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.post-footer-category {
+    font-size: var(--font-size-sm);
+    color: rgba(255, 255, 255, 0.4);
 }
