@@ -1,35 +1,30 @@
+/* ============================================ */
+/* ROOT VARIABLES                               */
+/* ============================================ */
+
 :root {
-    /* Base sizes */
     --font-size-base: 16px;
-    
-    /* Scale */
-    --font-size-sm: 0.875rem;   /* 14px */
-    --font-size-md: 1rem;        /* 16px */
-    --font-size-lg: 1.5rem;      /* 24px */
-    --font-size-xl: 2rem;        /* 32px */
-    --font-size-2xl: 3rem;       /* 48px */
-    --font-size-3xl: 4rem;       /* 64px */
-    --font-size-4xl: 5rem;       /* 80px */
-    --font-size-5xl: 6.25rem;    /* 100px */
-    
-    /* Responsive sizing */
-    --font-size-responsive: clamp(2rem, 8vw, 6.25rem); /* 32px to 100px */
-    --font-size-button: clamp(1.5rem, 5vw, 5rem);     /* 24px to 80px */
-    --font-size-pfp-plus: clamp(2rem, 4vw, 3.125rem); /* 32px to 50px */
+    --font-size-sm: 0.875rem;
+    --font-size-md: 1rem;
+    --font-size-lg: 1.5rem;
+    --font-size-xl: 2rem;
+    --font-size-2xl: 3rem;
+    --font-size-3xl: 4rem;
+    --font-size-4xl: 5rem;
+    --font-size-5xl: 6.25rem;
+    --font-size-responsive: clamp(2rem, 8vw, 6.25rem);
+    --font-size-button: clamp(1.5rem, 5vw, 5rem);
+    --font-size-pfp-plus: clamp(2rem, 4vw, 3.125rem);
+
+    /* Post card sizes - matches login/signup styling */
+    --post-title-size: var(--font-size-lg);
+    --post-body-size: calc(var(--font-size-lg) / 2);
+    --post-footer-size: var(--font-size-sm);
 }
 
-/* Apply to your elements */
-.input-line {
-    font-size: var(--font-size-5xl); /* 100px fixed */
-}
-
-.view-toggle {
-    font-size: var(--font-size-responsive); /* Scales with screen */
-}
-
-.upload-pfp-container span {
-    font-size: var(--font-size-pfp-plus); /* Responsive plus sign */
-}
+/* ============================================ */
+/* RESET                                        */
+/* ============================================ */
 
 * {
     margin: 0;
@@ -42,9 +37,11 @@ body {
     overflow: hidden;
 }
 
-/* === 1.0 MAIN CONTAINER === */
+/* ============================================ */
+/* 1.0 MAIN CONTAINER (LANDING PAGE)           */
+/* ============================================ */
+
 .main-container {
-    /* border: 2px solid rgb(255, 255, 255); */
     width: 100vw;
     height: 100vh;
     padding: 2%;
@@ -56,16 +53,20 @@ body {
     color: white;
 }
 
-/* === 2.0 TOP CONTAINER (PFP SECTION) === */
+/* ============================================ */
+/* 2.0 TOP CONTAINER (PFP SECTION)             */
+/* ============================================ */
+
 .main-inner-top-container {
-    /* border: 2px solid rgb(255, 255, 255); */
     height: 50%;
     width: 100%;
 }
 
-/* === 3.0 BOTTOM CONTAINER (INPUTS & BUTTONS) === */
+/* ============================================ */
+/* 3.0 BOTTOM CONTAINER (INPUTS & BUTTONS)     */
+/* ============================================ */
+
 .main-inner-bottom-container {
-    /* border: 2px solid rgb(255, 255, 255); */
     height: 50%;
     width: 100%;
     display: flex;
@@ -74,7 +75,6 @@ body {
 
 /* === 3.1 BOTTOM LEFT (INPUTS) === */
 .main-inner-bottom-left {
-    /* border: 2px solid rgb(255, 255, 255);  */
     width: 50%;
     height: 100%;
     display: flex;
@@ -84,19 +84,19 @@ body {
 
 /* === 3.2 BOTTOM RIGHT (BUTTONS) === */
 .main-inner-bottom-right {
-    /* border: 2px solid rgb(255, 255, 255); */
     width: 50%;
     height: 100%;
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
     align-items: flex-end;
-    gap: clamp(10px, 2vw, 40px); /* Responsive gap: min 10px, scales with viewport, max 40px */
-
+    gap: clamp(10px, 2vw, 40px);
 }
 
+/* ============================================ */
+/* 4.0 INPUT GROUPS                            */
+/* ============================================ */
 
-/* === 4.0 INPUT GROUPS === */
 .input-group {
     width: 100%;
     height: 100%;
@@ -111,7 +111,7 @@ body {
     border: none;
     border-bottom: 2px solid rgba(255, 255, 255, 0.5);
     color: rgba(255, 255, 255, 0.5);
-    font-size: 100px;
+    font-size: var(--font-size-5xl);
     line-height: 0.1;
     padding: 0;
     width: 100%;
@@ -137,7 +137,10 @@ body {
     border-bottom: 2px solid rgba(255, 255, 255, 0.5);
 }
 
-/* === 5.0 VIEW TOGGLE BUTTONS === */
+/* ============================================ */
+/* 5.0 VIEW TOGGLE BUTTONS                     */
+/* ============================================ */
+
 .view-toggle {
     background: transparent;
     color: rgba(255, 255, 255, 0.6);
@@ -149,8 +152,6 @@ body {
     flex: 0 1 auto;
     padding: 0;
     line-height: 1;
-    
-    /* Smooth transitions for hover effects only */
     transition: opacity 0.2s ease, text-shadow 0.2s ease, transform 0.1s ease;
     opacity: 0.7;
     text-shadow: 0 0 0px rgba(255, 255, 255, 0);
@@ -177,7 +178,10 @@ body {
     text-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
 }
 
-/* === 6.0 PFP SELECTION SECTION === */
+/* ============================================ */
+/* 6.0 PFP SELECTION                           */
+/* ============================================ */
+
 .pfp-selection-container {
     width: 100%;
     height: 100%;
@@ -245,20 +249,25 @@ body {
 }
 
 .upload-pfp-container span {
-    font-size: 50px;
+    font-size: var(--font-size-pfp-plus);
     line-height: 1;
     display: block;
 }
 
-/* === 7.0 UTILITY CLASSES === */
-/* Remove spinner from number inputs */
+/* ============================================ */
+/* 7.0 UTILITY CLASSES                         */
+/* ============================================ */
+
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
 
-/* === 8.0 MAIN PAGE CONTAINER === */
+/* ============================================ */
+/* 8.0 MAIN PAGE CONTAINER                     */
+/* ============================================ */
+
 .main-page-container {
     width: 100vw;
     height: 100vh;
@@ -271,18 +280,24 @@ input[type=number]::-webkit-outer-spin-button {
     color: white;
 }
 
-/* === 9.0 POST FEED === */
+/* ============================================ */
+/* 9.0 POST FEED                               */
+/* ============================================ */
+
 .post-feed {
     width: 100%;
     height: 100%;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 30px;
     padding-bottom: 40px;
 }
 
-/* === 10.0 POST FORM OVERLAY === */
+/* ============================================ */
+/* 10.0 POST FORM OVERLAY                      */
+/* ============================================ */
+
 .post-form-overlay {
     position: fixed;
     top: 0;
@@ -318,166 +333,6 @@ input[type=number]::-webkit-outer-spin-button {
 
 .post-form-title::placeholder {
     color: rgba(255, 255, 255, 0.3);
-}
-
-.post-form-category {
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.3);
-    color: rgba(255, 255, 255, 0.3);
-    font-size: var(--font-size-md);
-    font-family: inherit;
-    outline: none;
-    padding: 5px 0;
-    cursor: not-allowed;
-}
-
-.post-form-file-label {
-    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
-    color: rgba(255, 255, 255, 0.5);
-    font-size: var(--font-size-md);
-    font-family: inherit;
-    cursor: pointer;
-    padding: 5px 0;
-}
-
-.post-form-file-label:hover {
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.post-form-file-label input[type="file"] {
-    display: none;
-}
-
-.post-form-text {
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.3);
-    color: rgba(255, 255, 255, 0.3);
-    font-size: var(--font-size-md);
-    font-family: inherit;
-    outline: none;
-    resize: none;
-    height: 60px;
-    padding: 5px 0;
-    cursor: not-allowed;
-}
-
-.post-form-text::placeholder {
-    color: rgba(255, 255, 255, 0.3);
-}
-
-.post-form-buttons {
-    display: flex;
-    gap: 20px;
-    justify-content: flex-end;
-}
-
-.post-form-buttons button {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: var(--font-size-lg);
-    font-family: inherit;
-    cursor: pointer;
-    transition: opacity 0.2s ease, text-shadow 0.2s ease;
-    opacity: 0.7;
-    padding: 0;
-}
-
-.post-form-buttons button:hover {
-    opacity: 1;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
-    color: rgba(255, 255, 255, 0.9);
-}
-
-/* === 11.0 POST CARDS === */
-.post-card {
-    display: flex;
-    flex-direction: column;
-    max-width: 600px;
-}
-
-/* === 11.1 POST CARD CONTENT === */
-.post-card-content {
-    display: flex;
-    flex-direction: column;
-}
-
-.post-title {
-    font-size: var(--font-size-lg);
-    color: white;
-    line-height: 1.2;
-}
-
-.post-body {
-    font-size: calc(var(--font-size-lg) / 2);
-    color: rgba(255, 255, 255, 0.8);
-    line-height: 1.4;
-}
-
-.post-image {
-    width: 100%;
-    display: block;
-}
-
-/* === 11.2 POST LAYOUT VARIANTS === */
-.post-layout-title-text .post-title {
-    margin-bottom: 8px;
-}
-
-.post-layout-title-visual .post-title {
-    margin-bottom: 8px;
-}
-
-.post-layout-title-visual-text .post-title {
-    margin-bottom: 8px;
-}
-
-.post-visual-text-row {
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-}
-
-.post-visual-text-row .post-image {
-    width: 50%;
-    object-fit: cover;
-}
-
-.post-visual-text-row .post-body {
-    width: 50%;
-}
-
-/* === 11.3 POST FOOTER === */
-.post-footer {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    padding-top: 8px;
-}
-
-.post-footer-pfp {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    object-fit: cover;
-}
-
-.post-footer-username {
-    font-size: var(--font-size-sm);
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.post-footer-filename {
-    font-size: var(--font-size-sm);
-    color: rgba(255, 255, 255, 0.4);
-}
-
-.post-footer-category {
-    font-size: var(--font-size-sm);
-    color: rgba(255, 255, 255, 0.4);
 }
 
 /* === 10.2 POST FORM CATEGORY ROW === */
@@ -518,7 +373,6 @@ input[type=number]::-webkit-outer-spin-button {
     color: rgba(255, 255, 255, 0.9);
 }
 
-/* === 10.3 POST FORM NEW CATEGORY === */
 /* === 10.3 POST FORM CATEGORY INPUT (inline add) === */
 .post-form-category-input {
     flex: 1;
@@ -536,7 +390,25 @@ input[type=number]::-webkit-outer-spin-button {
     color: rgba(255, 255, 255, 0.3);
 }
 
-/* === 10.4 POST FORM TEXT (enabled) === */
+/* === 10.4 POST FORM FILE === */
+.post-form-file-label {
+    border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: var(--font-size-md);
+    font-family: inherit;
+    cursor: pointer;
+    padding: 5px 0;
+}
+
+.post-form-file-label:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.post-form-file-label input[type="file"] {
+    display: none;
+}
+
+/* === 10.5 POST FORM TEXT === */
 .post-form-text {
     background: transparent;
     border: none;
@@ -552,4 +424,189 @@ input[type=number]::-webkit-outer-spin-button {
 
 .post-form-text::placeholder {
     color: rgba(255, 255, 255, 0.3);
+}
+
+/* === 10.6 POST FORM BUTTONS === */
+.post-form-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-end;
+}
+
+.post-form-buttons button {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: var(--font-size-lg);
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.2s ease, text-shadow 0.2s ease;
+    opacity: 0.7;
+    padding: 0;
+}
+
+.post-form-buttons button:hover {
+    opacity: 1;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* ============================================ */
+/* 11.0 POST CARDS                             */
+/* ============================================ */
+
+.post-card {
+    display: flex;
+    flex-direction: column;
+    max-width: 600px;
+}
+
+/* === 11.1 POST CARD CONTENT === */
+.post-card-content {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ============================================ */
+/* 11.2 POST TITLE                             */
+/* ============================================ */
+
+/* Same size/weight as login-signup input text */
+.post-title {
+    font-size: var(--post-title-size);
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.2;
+    font-family: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================ */
+/* 11.3 POST BODY                              */
+/* ============================================ */
+
+/* Half the size of title */
+.post-body {
+    font-size: var(--post-body-size);
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    font-family: inherit;
+}
+
+/* ============================================ */
+/* 11.4 POST IMAGE                             */
+/* ============================================ */
+
+.post-image {
+    width: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+/* ============================================ */
+/* 11.5 POST LAYOUT VARIANTS                   */
+/* ============================================ */
+
+/* --- TITLE ONLY --- */
+/* Single line, tweet-like */
+.post-layout-title .post-title {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    padding-bottom: 8px;
+}
+
+/* --- TEXT ONLY --- */
+.post-layout-text .post-body {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    padding-bottom: 8px;
+}
+
+/* --- TITLE + TEXT --- */
+.post-layout-title-text .post-title {
+    margin-bottom: 6px;
+}
+
+.post-layout-title-text .post-body {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    padding-bottom: 8px;
+}
+
+/* --- VISUAL ONLY --- */
+.post-layout-visual .post-image {
+    max-height: 400px;
+}
+
+/* --- TITLE + VISUAL --- */
+.post-layout-title-visual .post-title {
+    margin-bottom: 8px;
+}
+
+.post-layout-title-visual .post-image {
+    max-height: 400px;
+}
+
+/* --- TITLE + VISUAL + TEXT (side by side) --- */
+.post-layout-title-visual-text .post-title {
+    margin-bottom: 8px;
+}
+
+.post-visual-text-row {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.post-visual-text-row .post-image {
+    width: 50%;
+    max-height: 300px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.post-visual-text-row .post-body {
+    width: 50%;
+}
+
+/* ============================================ */
+/* 11.6 POST FOOTER                            */
+/* ============================================ */
+
+.post-footer {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+}
+
+.post-footer-pfp {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.post-footer-username {
+    font-size: var(--post-footer-size);
+    color: rgba(255, 255, 255, 0.5);
+    font-family: inherit;
+}
+
+.post-footer-filename {
+    font-size: var(--post-footer-size);
+    color: rgba(255, 255, 255, 0.3);
+    font-family: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.post-footer-category {
+    font-size: var(--post-footer-size);
+    color: rgba(255, 255, 255, 0.3);
+    font-family: inherit;
+    margin-left: auto;
 }
