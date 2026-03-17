@@ -1,11 +1,8 @@
 // ============================================
-// FIREBASE IMPORTS
+// SUPABASE IMPORTS
 // ============================================
 
-import { auth, db, storage } from './firebase-config.js';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes } from 'firebase/storage';
+import { supabase } from './supabase-config.js';
 
 // ============================================
 // PFP CONFIGURATION
@@ -199,7 +196,7 @@ function validateSignupForm() {
 }
 
 // ============================================
-// 4. FIREBASE AUTH - LOGIN
+// 4. SUPABASE AUTH - LOGIN
 // ============================================
 
 async function handleLogin() {
@@ -209,13 +206,17 @@ async function handleLogin() {
     const password = loginPassword.value;
 
     try {
-        // Firebase Auth uses email, so we'll use username@demodotcom.local as the email
-        const email = `${username}@demodotcom.local`;
+        // Supabase Auth uses email
+        const email = `${username}@demodotcom.com`;
         
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
         
-        console.log('✓ Login successful:', user.uid);
+        if (error) throw error;
+        
+        console.log('✓ Login successful:', data.user.id);
         alert(`Welcome back, ${username}!`);
         
         // TODO: Redirect to dashboard
@@ -226,7 +227,7 @@ async function handleLogin() {
 }
 
 // ============================================
-// 5. FIREBASE AUTH - SIGNUP
+// 5. SUPABASE AUTH - SIGNUP
 // ============================================
 
 async function handleSignup() {
@@ -237,32 +238,52 @@ async function handleSignup() {
     const pfp = selectedPFP || 'uploaded';
 
     try {
-        // Firebase Auth uses email, so we'll use username@demodotcom.local as the email
-        const email = `${username}@demodotcom.local`;
+        // Create user in Supabase Auth
+        const email = `${username}@demodotcom.com`;
         
-        // Create user in Firebase Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+        const { data, error } = await supabase.auth.signUp({
+            email: email,
+            password: password
+        });
         
-        console.log('✓ User created:', user.uid);
+        if (error) throw error;
+        
+        const userId = data.user.id;
+        console.log('✓ User created:', userId);
+
+        // IMPORTANT: Sign in immediately after signup to get a valid session
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password
+        });
+
+        if (signInError) {
+            console.error('Auto sign-in failed:', signInError);
+            throw signInError;
+        }
+
+        console.log('✓ Auto signed in with session');
         
         // Upload PFP if custom image
         let pfpURL = null;
         if (uploadedPFP) {
-            pfpURL = await uploadPFPToStorage(user.uid, uploadedPFP);
+            console.log('Starting PFP upload...');
+            pfpURL = await uploadPFPToStorage(userId, uploadedPFP);
+            console.log('PFP upload complete, URL:', pfpURL);
         }
         
-        // Save user data to Firestore
-        await saveUserToFirestore(user.uid, username, pfp, pfpURL);
-        
-        console.log('✓ User data saved to Firestore');
-        alert(`Signup successful, ${username}! Welcome!`);
+        // Save user data to Supabase database
+        console.log('About to save user:', { userId, username, pfp, pfpURL });
+        await saveUserToDatabase(userId, username, pfp, pfpURL);
+        console.log('User saved successfully!');
         
         // Clear form
         signupUsername.value = '';
         signupPassword.value = '';
         selectedPFP = null;
         uploadedPFP = null;
+        
+        alert(`Signup successful, ${username}! Welcome!`);
         
         // TODO: Redirect to dashboard
     } catch (error) {
@@ -272,49 +293,81 @@ async function handleSignup() {
 }
 
 // ============================================
-// 6. FIREBASE STORAGE - UPLOAD PFP
+// 6. SUPABASE STORAGE - UPLOAD PFP
 // ============================================
 
 async function uploadPFPToStorage(userId, imageData) {
     try {
-        // Convert data URL to blob
         const response = await fetch(imageData);
         const blob = await response.blob();
+        const file = new File([blob], `${userId}.jpg`, { type: 'image/jpeg' });
         
-        // Create storage reference
-        const storageRef = ref(storage, `groups/group1/pfps/${userId}.jpg`);
+        console.log('Uploading file:', file.name, 'Size:', file.size, 'Type:', file.type);
         
-        // Upload file
-        await uploadBytes(storageRef, blob);
+        // Get current user/session for debugging
+        const { data: { user } } = await supabase.auth.getUser();
+        console.log('Current user:', user?.id);
         
-        console.log('✓ PFP uploaded to Cloud Storage');
-        return storageRef.fullPath;
+        // Upload file to Supabase Storage
+        const { data, error } = await supabase.storage
+            .from('group1-pfps')
+            .upload(`${userId}.jpg`, file);
+        
+        if (error) {
+            console.error('Full storage error:', JSON.stringify(error));
+            throw error;
+        }
+        
+        console.log('✓ PFP uploaded to Storage');
+        
+        const { data: urlData } = supabase.storage
+            .from('group1-pfps')
+            .getPublicUrl(`${userId}.jpg`);
+        
+        console.log('✓ PFP URL:', urlData.publicUrl);
+        return urlData.publicUrl;
     } catch (error) {
-        console.error('PFP upload error:', error.message);
+        console.error('PFP upload error:', error);
         throw error;
     }
 }
 
 // ============================================
-// 7. FIRESTORE - SAVE USER DATA
+// 7. SUPABASE DATABASE - SAVE USER DATA
 // ============================================
 
-async function saveUserToFirestore(userId, username, pfp, pfpURL) {
+async function saveUserToDatabase(userId, username, pfp, pfpURL) {
     try {
-        const userRef = doc(db, 'groups/group1/users', userId);
-        
-        await setDoc(userRef, {
+        console.log('Attempting to insert:', {
+            id: userId,
             username: username,
-            email: `${username}@demodotcom.local`,
+            email: `${username}@demodotcom.com`,
             pfp: pfp,
-            pfpURL: pfpURL,
-            createdAt: new Date(),
-            updatedAt: new Date()
+            pfp_url: pfpURL
         });
+
+        const { data, error } = await supabase
+            .from('users')
+            .insert([
+                {
+                    id: userId,
+                    username: username,
+                    email: `${username}@demodotcom.com`,
+                    pfp: pfp,
+                    pfp_url: pfpURL,
+                    created_at: new Date(),
+                    updated_at: new Date()
+                }
+            ]);
         
-        console.log('✓ User saved to Firestore');
+        if (error) {
+            console.error('Insert error details:', error);
+            throw error;
+        }
+        
+        console.log('✓ User saved to database');
     } catch (error) {
-        console.error('Firestore error:', error.message);
+        console.error('Database error:', error);
         throw error;
     }
 }
