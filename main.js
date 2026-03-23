@@ -20,6 +20,7 @@ const postFileName = document.getElementById('postFileName');
 const postText = document.getElementById('postText');
 const postSubmitBtn = document.getElementById('postSubmitBtn');
 const postCancelBtn = document.getElementById('postCancelBtn');
+const logoutBtn = document.getElementById('logoutBtn');
 
 // Cover image prompt
 const coverImageOverlay = document.getElementById('coverImageOverlay');
@@ -37,10 +38,15 @@ let currentUserData = null;
 let pendingPost = null;
 let editMode = false;
 let editingPostId = null; // When editing an existing post
+let activeUserFilter = null;      // stores a user_id
+let activeCategoryFilter = null;  // stores a category string
+const NONE_CATEGORY_FILTER = '__NONE__';
+
 
 // Double right-click detection
 let lastRightClick = 0;
 const DOUBLE_CLICK_THRESHOLD = 400; // ms
+
 
 // ============================================
 // 1. AUTH CHECK
@@ -94,27 +100,36 @@ function isVisualFile(file) {
 // ============================================
 
 function initializePostForm() {
-    // Right-click: single = post form, double = toggle edit mode
-    mainPageContainer.addEventListener('contextmenu', (e) => {
+        mainPageContainer.addEventListener('contextmenu', (e) => {
         e.preventDefault();
 
         const now = Date.now();
         const timeSince = now - lastRightClick;
         lastRightClick = now;
 
+        const isFormOpen = postFormOverlay.style.display === 'flex';
+
+        // Double right-click: toggle edit mode
         if (timeSince < DOUBLE_CLICK_THRESHOLD) {
-            // Double right-click: toggle edit mode
             lastRightClick = 0; // Reset so third click doesn't re-trigger
             closePostForm();
             toggleEditMode();
             return;
         }
 
-        // Single right-click: open post form (only if not in edit mode)
-        // Use a small delay to make sure it's not the first click of a double
+        // Single right-click behavior (delayed so we can detect double)
         setTimeout(() => {
             // If lastRightClick hasn't been reset (meaning no second click came)
-            if (lastRightClick === now && !editMode) {
+            if (lastRightClick !== now) return;
+
+            // If form is open: right-click closes it
+            if (isFormOpen) {
+                closePostForm();
+                return;
+            }
+
+            // Otherwise open form (only when not in edit mode)
+            if (!editMode) {
                 openPostForm();
             }
         }, DOUBLE_CLICK_THRESHOLD);
@@ -187,6 +202,15 @@ function initializePostForm() {
         handleCoverImageSkip();
     });
 
+        logoutBtn.addEventListener('click', async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            alert(`Logout failed: ${error.message}`);
+            return;
+        }
+        window.location.href = './index.html';
+    });
+    
     // Escape key exits edit mode
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -235,6 +259,10 @@ function closeCoverImagePrompt() {
 function toggleEditMode() {
     editMode = !editMode;
     console.log('Edit mode:', editMode ? 'ON' : 'OFF');
+
+    // Clear filters whenever we toggle edit mode (so nothing "sticks")
+    activeUserFilter = null;
+    activeCategoryFilter = null;
 
     if (editMode) {
         mainPageContainer.classList.add('edit-mode');
@@ -545,8 +573,21 @@ async function loadPosts() {
         .order('created_at', { ascending: false });
 
     // In edit mode, only show current user's posts
+        // In edit mode, always only show current user's posts (filters disabled)
     if (editMode) {
         query = query.eq('user_id', currentUser.id);
+    } else {
+        // Normal mode: apply optional filters
+        if (activeUserFilter) {
+            query = query.eq('user_id', activeUserFilter);
+        }
+        if (activeCategoryFilter) {
+        if (activeCategoryFilter === NONE_CATEGORY_FILTER) {
+            query = query.is('category', null);
+        } else {
+            query = query.eq('category', activeCategoryFilter);
+        }
+    }
     }
 
     const { data: posts, error } = await query;
@@ -666,34 +707,51 @@ function buildPostCard(post, user) {
     const pfpSrc = user.pfp_url || `./images/pfps/${user.pfp}`;
 
     if (editMode) {
-        // Edit mode footer: pfp, edit, delete, filename, category
-        footer.innerHTML = `
-            <img class="post-footer-pfp" src="${pfpSrc}" alt="">
-            <span class="post-footer-action post-footer-edit">edit</span>
-            <span class="post-footer-action post-footer-delete">delete</span>
-            ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
-            <span class="post-footer-category">${post.category || 'none'}</span>
-        `;
+    // Edit mode footer: pfp + edit/delete + (optional) filename + category
+    footer.innerHTML = `
+        <img class="post-footer-pfp" src="${pfpSrc}" alt="">
+        <span class="post-footer-action post-footer-edit">edit</span>
+        <span class="post-footer-action post-footer-delete">delete</span>
+        ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
+        <span class="post-footer-category">${post.category || 'none'}</span>
+    `;
 
-        // Wire up edit button
-        footer.querySelector('.post-footer-edit').addEventListener('click', () => {
-            openEditForm(post);
+    footer.querySelector('.post-footer-edit')?.addEventListener('click', () => {
+        openEditForm(post);
+    });
+
+    footer.querySelector('.post-footer-delete')?.addEventListener('click', () => {
+        handleDeletePost(post.id);
+    });
+} else {
+    // Normal footer: pfp + clickable username/category filters
+    footer.innerHTML = `
+        <img class="post-footer-pfp" src="${pfpSrc}" alt="">
+        <span class="post-footer-username post-footer-filter-btn">${user.username || 'unknown'}</span>
+        ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
+        <span class="post-footer-category post-footer-filter-btn">${post.category || 'none'}</span>
+    `;
+
+    const usernameEl = footer.querySelector('.post-footer-username');
+    if (usernameEl && user?.id) {
+        usernameEl.addEventListener('click', () => {
+            activeUserFilter = (activeUserFilter === user.id) ? null : user.id;
+            loadPosts();
         });
-
-        // Wire up delete button
-        footer.querySelector('.post-footer-delete').addEventListener('click', () => {
-            handleDeletePost(post.id);
-        });
-
-    } else {
-        // Normal footer: pfp, username, filename, category
-        footer.innerHTML = `
-            <img class="post-footer-pfp" src="${pfpSrc}" alt="">
-            <span class="post-footer-username">${user.username || 'unknown'}</span>
-            ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
-            <span class="post-footer-category">${post.category || 'none'}</span>
-        `;
     }
+
+    const categoryEl = footer.querySelector('.post-footer-category');
+    if (categoryEl) {
+        categoryEl.addEventListener('click', () => {
+            const isNone = post.category == null;
+
+            const nextFilter = isNone ? NONE_CATEGORY_FILTER : post.category;
+
+            activeCategoryFilter = (activeCategoryFilter === nextFilter) ? null : nextFilter;
+            loadPosts();
+        });
+    }
+}
 
     card.appendChild(footer);
 

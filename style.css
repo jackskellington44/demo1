@@ -709,3 +709,39 @@ input[type=number]::-webkit-outer-spin-button {
 .post-footer-delete:hover {
     color: rgba(255, 100, 100, 0.9);
 }
+
+/* ============================================ */
+/* 14.0 LOG OUT BUTTON                         */
+/* ============================================ */
+
+.logout-btn {
+    position: fixed;
+    right: 2%;
+    bottom: 2%;
+    z-index: 50;
+}
+
+.logout-btn {
+    display: none;
+}
+
+.main-page-container.edit-mode .logout-btn {
+    display: inline-block;
+}
+
+
+/* ============================================ */
+/* 15.0 FOOTER FILTER BUTTONS                  */
+/* ============================================ */ 
+
+/* Clickable footer filters (normal mode) */
+.post-footer-filter-btn {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    cursor: pointer;
+}
+
+.post-footer-filter-btn:hover {
+    color: rgba(255, 255, 255, 0.9);
+}
