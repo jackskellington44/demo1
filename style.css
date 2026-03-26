@@ -745,3 +745,140 @@ input[type=number]::-webkit-outer-spin-button {
 .post-footer-filter-btn:hover {
     color: rgba(255, 255, 255, 0.9);
 }
+
+/* ============================================ */
+/* 16.0 POST DETAIL MODAL                       */
+/* ============================================ */
+
+#postDetailOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.post-detail-modal {
+    width: min(900px, 92vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.post-detail-header {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.post-detail-close {
+    cursor: pointer;
+    font-size: 24px;
+    line-height: 24px;
+    color: rgba(255,255,255,0.7);
+}
+
+.post-detail-close:hover {
+    color: rgba(255,255,255,1);
+}
+
+.post-detail-content .post-title {
+    font-size: 1.2em;
+}
+
+.post-detail-content .post-body {
+    margin-top: 10px;
+    opacity: 0.9;
+}
+
+.post-detail-comments {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.10);
+}
+
+.post-detail-comments-title {
+    opacity: 0.8;
+    margin-bottom: 10px;
+}
+
+.comments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.comment-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.comment-username {
+    opacity: 0.8;
+    white-space: nowrap;
+}
+
+.comment-body {
+    opacity: 0.95;
+}
+
+.comment-form {
+    display: flex;
+    gap: 8px;
+}
+
+.comment-input {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.10);
+    color: white;
+    padding: 10px 12px;
+    border-radius: 10px;
+}
+
+.comment-submit-btn {
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: white;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+/* ============================================ */
+/* 17.0 CANVAS VIEWPORT AND POST CANVAS         */
+/* ============================================ */
+
+/* Allow 2D scrolling for now (simple + works).
+   Later we can replace with drag-to-pan + zoom. */
+#canvasViewport {
+  position: fixed;
+  inset: 0;
+  overflow: auto; /* <-- IMPORTANT: enables scroll both directions */
+  background-image: url('./images/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Make the canvas a big surface */
+#postCanvas {
+  position: relative; /* <-- IMPORTANT: children absolute relative to this */
+  width: 6000px;
+  height: 6000px;
+  background: transparent;
+}
+
+/* Cards are absolutely positioned within the canvas */
+.post-card {
+  position: absolute;
+  /* optional for readability while testing */
+  text-shadow: 0 0 8px rgba(0,0,0,0.6);
+}

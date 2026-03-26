@@ -7,18 +7,45 @@
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    <!-- Main feed page -->
-    <div class="main-page-container" id="mainPageContainer">
+  <!-- Main feed page -->
+  <div class="main-page-container" id="mainPageContainer">
 
-        <!-- Post feed -->
-        <div class="post-feed" id="postFeed">
-            <!-- Posts will be loaded here dynamically -->
-        </div>
+    <!-- Scrollable viewport (background + scrolling) -->
+    <div id="canvasViewport">
+      <div id="postCanvas"></div>
+    </div>
 
-        <button id="logoutBtn" class="view-toggle logout-btn">log out</button>
+    <button id="logoutBtn" class="view-toggle logout-btn">log out</button>
+  </div>
 
+  <!-- Post form overlay (hidden by default, opens on right-click) -->
+  <div class="post-form-overlay" id="postFormOverlay" style="display: none;">
+    <div class="post-form" id="postForm">
+      <input type="text" class="post-form-title" id="postTitle" placeholder="title" maxlength="75" autocomplete="off">
 
-        <!-- Post form overlay (hidden by default, opens on right-click) -->
+      <div class="post-form-category-row">
+        <select class="post-form-category" id="postCategory">
+          <option value="">none</option>
+        </select>
+        <input type="text" class="post-form-category-input" id="postCategoryInput" placeholder="type category, press enter" autocomplete="off" style="display: none;">
+        <div class="post-form-add-category" id="addCategoryToggle">+</div>
+      </div>
+
+      <label class="post-form-file-label" id="postFileLabel">
+        <span id="postFileName">choose file</span>
+        <input type="file" id="postFileInput">
+      </label>
+
+      <textarea class="post-form-text" id="postText" placeholder="text"></textarea>
+
+      <div class="post-form-buttons">
+        <button id="postSubmitBtn">submit</button>
+        <button id="postCancelBtn">cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- Post form overlay (hidden by default, opens on right-click) -->
                 <!-- Post form overlay (hidden by default, opens on right-click) -->
         <div class="post-form-overlay" id="postFormOverlay" style="display: none;">
             <div class="post-form" id="postForm">
@@ -68,7 +95,29 @@
             </div>
         </div>
 
-    </div>
+        <!-- ============================================ -->
+        <!-- POST DETAIL MODAL                            -->
+        <!-- ============================================ -->
+        <div id="postDetailOverlay" class="overlay" style="display:none;">
+        <div id="postDetailModal" class="post-detail-modal">
+            <div class="post-detail-header">
+            <span id="postDetailClose" class="post-detail-close">×</span>
+            </div>
+
+            <div id="postDetailContent" class="post-detail-content"></div>
+
+            <div class="post-detail-comments">
+            <div class="post-detail-comments-title">comments</div>
+
+            <div id="commentsList" class="comments-list"></div>
+
+            <div class="comment-form">
+                <input id="commentInput" class="comment-input" type="text" placeholder="write a comment..." />
+                <button id="commentSubmitBtn" class="comment-submit-btn">post</button>
+            </div>
+            </div>
+        </div>
+        </div>
 
     <script type="module" src="./main.js"></script>
 </body>
