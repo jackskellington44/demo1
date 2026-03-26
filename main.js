@@ -72,22 +72,152 @@ let lastRightClick = 0;
 const DOUBLE_CLICK_THRESHOLD = 400; // ms
 
 
-// Ca
-let canvasOffsetX = 0;
-let canvasOffsetY = 0;
+// Canvas pan state
+// ============================================
+// CANVAS PAN + PLACEMENT STATE
+// ============================================
 
 let isPanning = false;
 let panStartX = 0;
 let panStartY = 0;
 let panStartOffsetX = 0;
 let panStartOffsetY = 0;
+let canvasOffsetX = 0;
+let canvasOffsetY = 0;
+
+// Placement mode
+let isPlacing = false;
+let placingPost = null;      // the post row (must include id)
+let placingCardEl = null;    // DOM element for the card being placed
+let placeMouseOffsetX = 0;   // center-of-card offset
+let placeMouseOffsetY = 0;
+
+const CARD_GAP = 10; // minimum gap between cards (px)
 
 // ============================================
 // 0. CANVAS PANNING
 // ============================================
 
 function applyCanvasTransform() {
+  if (!postCanvas) return;
   postCanvas.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px)`;
+}
+
+// Convert viewport mouse coordinates to canvas coordinates (account for current pan)
+function viewportPointToCanvasPoint(clientX, clientY) {
+  // postCanvas is translated by canvasOffsetX/Y, so subtract it to get canvas coords
+  return {
+    x: clientX - canvasOffsetX,
+    y: clientY - canvasOffsetY
+  };
+}
+
+function getCardRectAt(cardEl, x, y) {
+  const w = cardEl.offsetWidth;
+  const h = cardEl.offsetHeight;
+  return { left: x, top: y, right: x + w, bottom: y + h };
+}
+
+function rectsOverlap(a, b, gap = 0) {
+  return !(
+    a.right + gap <= b.left ||
+    a.left >= b.right + gap ||
+    a.bottom + gap <= b.top ||
+    a.top >= b.bottom + gap
+  );
+}
+
+function canPlaceCardAt(cardEl, x, y) {
+  const rect = getCardRectAt(cardEl, x, y);
+
+  const others = postCanvas.querySelectorAll('.post-card');
+  for (const other of others) {
+    if (other === cardEl) continue;
+
+    const ox = parseFloat(other.style.left || '0');
+    const oy = parseFloat(other.style.top || '0');
+    const orect = getCardRectAt(other, ox, oy);
+
+    if (rectsOverlap(rect, orect, CARD_GAP)) return false;
+  }
+  return true;
+}
+
+function startPlacement(post, cardEl, mouseEvent) {
+  isPlacing = true;
+  placingPost = post;
+  placingCardEl = cardEl;
+
+  // Ensure it's on top while placing
+  placingCardEl.style.zIndex = '20';
+
+  // Use center under cursor (feels nicest)
+  const w = placingCardEl.offsetWidth;
+  const h = placingCardEl.offsetHeight;
+  placeMouseOffsetX = w / 2;
+  placeMouseOffsetY = h / 2;
+
+  // Position immediately
+  updatePlacementPosition(mouseEvent);
+
+  // Optional: visually indicate placing
+  placingCardEl.style.outline = '2px solid rgba(255,255,255,0.25)';
+}
+
+function stopPlacement() {
+  if (placingCardEl) {
+    placingCardEl.style.zIndex = '';
+    placingCardEl.style.outline = '';
+  }
+  isPlacing = false;
+  placingPost = null;
+  placingCardEl = null;
+}
+
+function updatePlacementPosition(e) {
+  if (!isPlacing || !placingCardEl) return;
+
+  const pt = viewportPointToCanvasPoint(e.clientX, e.clientY);
+  const x = pt.x - placeMouseOffsetX;
+  const y = pt.y - placeMouseOffsetY;
+
+  placingCardEl.style.left = `${x}px`;
+  placingCardEl.style.top = `${y}px`;
+
+  // Preview valid/invalid
+  const ok = canPlaceCardAt(placingCardEl, x, y);
+  placingCardEl.style.opacity = ok ? '1' : '0.6';
+}
+
+async function tryDropPlacement(e) {
+  if (!isPlacing || !placingCardEl || !placingPost) return;
+
+  const x = parseFloat(placingCardEl.style.left || '0');
+  const y = parseFloat(placingCardEl.style.top || '0');
+
+  if (!canPlaceCardAt(placingCardEl, x, y)) {
+    // keep sticky until a valid spot
+    return;
+  }
+
+  // Save x/y to DB
+  const { error } = await supabase
+    .from('posts')
+    .update({ x, y })
+    .eq('id', placingPost.id)
+    .eq('user_id', currentUser.id);
+
+  if (error) {
+    console.error('Failed to save placement:', error);
+    alert(`Failed to save placement: ${error.message}`);
+    return;
+  }
+
+  // Commit placement locally
+  placingPost.x = x;
+  placingPost.y = y;
+
+  stopPlacement();
 }
 
 // ============================================
@@ -328,90 +458,102 @@ async function handleAddCategory() {
 // ============================================
 
 async function handlePostSubmit() {
-    const title = postTitle.value.trim();
-    const body = postText.value.trim();
-    const category = postCategory.value || null;
-    const file = postFileInput.files[0] || null;
+  const title = postTitle.value.trim();
+  const body = postText.value.trim();
+  const category = postCategory.value || null;
+  const file = postFileInput.files[0] || null;
 
-    if (!title && !file && !body) {
-        alert('Add a title, text, or choose a file');
-        return;
+  if (!title && !file && !body) {
+    alert('Add a title, text, or choose a file');
+    return;
+  }
+
+  try {
+    let fileURL = null;
+    let fileName = null;
+    let fileType = null;
+
+    if (file) {
+      fileName = file.name;
+      fileType = getFileType(file);
+
+      const filePath = `${currentUser.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('group1-posts')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('group1-posts')
+        .getPublicUrl(filePath);
+
+      fileURL = urlData.publicUrl;
     }
 
-    try {
-        let fileURL = null;
-        let fileName = null;
-        let fileType = null;
+    const postRecord = {
+      title: title || null,
+      body: body || null,
+      category: category
+    };
 
-        if (file) {
-            fileName = file.name;
-            fileType = getFileType(file);
+    if (file) {
+      postRecord.file_url = fileURL;
+      postRecord.file_name = fileName;
+      postRecord.file_type = fileType;
+    }
 
-            const filePath = `${currentUser.id}/${Date.now()}-${file.name}`;
-            const { error: uploadError } = await supabase.storage
-                .from('group1-posts')
-                .upload(filePath, file);
-
-            if (uploadError) throw uploadError;
-
-            const { data: urlData } = supabase.storage
-                .from('group1-posts')
-                .getPublicUrl(filePath);
-
-            fileURL = urlData.publicUrl;
-        }
-
-        const postRecord = {
-            title: title || null,
-            body: body || null,
-            category: category
-        };
-
-        if (file) {
-            postRecord.file_url = fileURL;
-            postRecord.file_name = fileName;
-            postRecord.file_type = fileType;
-        }
-
-        // EDIT
-        if (editingPostId) {
-            if (file && !isVisualFile(file)) {
-                pendingPost = { ...postRecord, _isEdit: true, _editId: editingPostId };
-                closePostForm();
-                coverImageOverlay.style.display = 'flex';
-                return;
-            }
-
-            await updatePost(editingPostId, postRecord);
-            closePostForm();
-            await loadPosts();
-            return;
-        }
-
-        // CREATE
-        postRecord.user_id = currentUser.id;
-        postRecord.group_id = 'group1';
-
-        if (!file) {
-            postRecord.file_url = null;
-            postRecord.file_name = null;
-            postRecord.file_type = null;
-        }
-
-        if (file && !isVisualFile(file)) {
-            pendingPost = postRecord;
-            closePostForm();
-            coverImageOverlay.style.display = 'flex';
-            return;
-        }
-
-        await savePost(postRecord);
+    // EDIT (update only; placement is via "reposition")
+    if (editingPostId) {
+      if (file && !isVisualFile(file)) {
+        pendingPost = { ...postRecord, _isEdit: true, _editId: editingPostId };
         closePostForm();
-        await loadPosts();
-    } catch (error) {
-        console.error('Post submission failed:', error.message);
-        alert(`Post failed: ${error.message}`);
+        coverImageOverlay.style.display = 'flex';
+        return;
+      }
+
+      await updatePost(editingPostId, postRecord);
+      closePostForm();
+      await loadPosts();
+      return;
     }
+
+    // CREATE
+    postRecord.user_id = currentUser.id;
+    postRecord.group_id = 'group1';
+
+    if (!file) {
+      postRecord.file_url = null;
+      postRecord.file_name = null;
+      postRecord.file_type = null;
+    }
+
+    if (file && !isVisualFile(file)) {
+      pendingPost = postRecord;
+      closePostForm();
+      coverImageOverlay.style.display = 'flex';
+      return;
+    }
+
+    const created = await savePost(postRecord);
+    closePostForm();
+
+    await loadPosts();
+
+    const createdEl = postCanvas.querySelector(`.post-card[data-post-id="${created.id}"]`);
+    if (createdEl) {
+      startPlacement(
+        created,
+        createdEl,
+        window.__lastMouseEventForPlacement || { clientX: 200, clientY: 200 }
+      );
+    } else {
+      console.warn('Created post card not found for placement', created.id);
+    }
+  } catch (error) {
+    console.error('Post submission failed:', error?.message || error);
+    alert(`Post failed: ${error?.message || error}`);
+  }
 }
 
 // ============================================
@@ -675,6 +817,8 @@ async function loadPosts() {
 function buildPostCard(post, user) {
     const card = document.createElement('div');
     card.className = 'post-card';
+    card.dataset.postId = post.id;
+
 
     // ---- absolute placement (fallback if x/y are null) ----
     const idx = (buildPostCard._indexCounter || 0);
@@ -758,6 +902,7 @@ function buildPostCard(post, user) {
         footer.innerHTML = `
             <img class="post-footer-pfp" src="${pfpSrc}" alt="">
             <span class="post-footer-action post-footer-edit">edit</span>
+            <span class="post-footer-action post-footer-reposition">reposition</span>
             <span class="post-footer-action post-footer-delete">delete</span>
             ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
             <span class="post-footer-category">${post.category || 'none'}</span>
@@ -772,6 +917,14 @@ function buildPostCard(post, user) {
             e.stopPropagation();
             handleDeletePost(post.id);
         });
+
+        footer.querySelector('.post-footer-reposition')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // start placement using current mouse position
+            startPlacement(post, card, window.__lastMouseEventForPlacement || { clientX: 200, clientY: 200 });
+            });
+
     } else {
         footer.innerHTML = `
             <img class="post-footer-pfp" src="${pfpSrc}" alt="">
@@ -806,9 +959,10 @@ function buildPostCard(post, user) {
     card.appendChild(footer);
 
     // Card click opens modal
-    card.addEventListener('click', (e) => {
-        if (e.target.closest('.post-footer-action')) return;
-        openPostDetailModal(post, user);
+   card.addEventListener('click', (e) => {
+    if (isPlacing) return;
+    if (e.target.closest('.post-footer-action')) return;
+    openPostDetailModal(post, user);
     });
 
     return card;
@@ -820,13 +974,17 @@ function buildPostCard(post, user) {
 
 function initializeEventListeners() {
 
-    
+    window.addEventListener('mousemove', (e) => {
+    window.__lastMouseEventForPlacement = e;
+    });
+
     const canvasViewport = document.getElementById('canvasViewport');
 
     // Pan by dragging empty space
     canvasViewport.addEventListener('mousedown', (e) => {
     // only left click
     if (e.button !== 0) return;
+    if (isPlacing) return;
 
     // if clicked on a post card, don't pan (we'll use that later for placement drag)
     if (e.target.closest('.post-card')) return;
@@ -851,7 +1009,16 @@ function initializeEventListeners() {
     isPanning = false;
     });
 
-    
+    window.addEventListener('mousemove', (e) => {
+    if (isPlacing) updatePlacementPosition(e);
+    });
+
+    window.addEventListener('mousedown', async (e) => {
+    if (!isPlacing) return;
+    if (e.button !== 0) return; // left click drops
+    await tryDropPlacement(e);
+    });
+        
 
     // Right-click: single = open/close form, double = toggle edit mode
     (canvasViewport || mainPageContainer).addEventListener('contextmenu', (e) => {
