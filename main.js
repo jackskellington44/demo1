@@ -498,6 +498,20 @@ async function loadLinks() {
   return lastLoadedLinks;
 }
 
+function orthogonalPathD(x1, y1, x2, y2) {
+  // Option A: horizontal then vertical
+  const d1 = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2}`;
+  const len1 = Math.abs(x2 - x1) + Math.abs(y2 - y1);
+
+  // Option B: vertical then horizontal
+  const d2 = `M ${x1} ${y1} L ${x1} ${y2} L ${x2} ${y2}`;
+  const len2 = Math.abs(x2 - x1) + Math.abs(y2 - y1);
+
+  // lengths are the same in this simple case, but we’ll keep structure
+  // in case you later add margins/avoidance.
+  return (len2 < len1) ? d2 : d1;
+}
+
 function renderLinks(posts, links) {
   if (!linkLayer || !postCanvas) return;
   linkLayer.innerHTML = '';
@@ -525,14 +539,13 @@ function renderLinks(posts, links) {
     const x2 = (bRect.left + bRect.right) / 2 - svgRect.left;
     const y2 = (bRect.top + bRect.bottom) / 2 - svgRect.top;
 
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1);
-    line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2);
-    line.setAttribute('y2', y2);
-    line.setAttribute('stroke', 'rgba(255,255,255,0.22)');
-    line.setAttribute('stroke-width', '2');
-    linkLayer.appendChild(line);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', orthogonalPathD(x1, y1, x2, y2));
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'rgba(255,255,255,0.22)');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('stroke-linejoin', 'round'); // makes the corner nicer
+    linkLayer.appendChild(path);
   }
 }
 
