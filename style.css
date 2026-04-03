@@ -878,9 +878,31 @@ input[type=number]::-webkit-outer-spin-button {
   will-change: transform;
 }
 
+#postCanvas {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
 /* Cards are absolutely positioned within the canvas */
 .post-card {
   position: absolute;
   /* optional for readability while testing */
   text-shadow: 0 0 8px rgba(0,0,0,0.6);
+}
+
+/* ============================================ */
+/* 18.0 LINK LAYER                               */
+/* ============================================ */
+
+#linkLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* don't block clicks */
+  z-index: 5;
+}
+
+#postCanvas {
+  z-index: 10;
 }

@@ -12,6 +12,7 @@ const mainPageContainer = document.getElementById('mainPageContainer');
 
 // Canvas (new)
 const postCanvas = document.getElementById('postCanvas');
+const linkLayer = document.getElementById('linkLayer');
 
 // (legacy) if still in HTML; not used anymore once canvas is wired
 const postFeed = document.getElementById('postFeed');
@@ -54,6 +55,9 @@ const commentSubmitBtn = document.getElementById('commentSubmitBtn');
 let currentUser = null;
 let currentUserData = null;
 
+// Link creation state: if you right-click a post, new post links to it
+let pendingLinkPostId = null;
+
 // Post create/edit state
 let pendingPost = null;
 let editMode = false;
@@ -71,11 +75,18 @@ let activePostForModal = null;
 let lastRightClick = 0;
 const DOUBLE_CLICK_THRESHOLD = 400; // ms
 
+// Cache last loaded data for re-rendering link lines on pan/zoom/move
+let lastLoadedPosts = [];
+let lastLoadedLinks = [];
 
-// Canvas pan state
 // ============================================
 // CANVAS PAN + PLACEMENT STATE
 // ============================================
+
+let canvasScale = 1;
+const MIN_SCALE = 0.4;
+const MAX_SCALE = 2.2;
+const ZOOM_SENSITIVITY = 0.0015; // tweak: smaller = slower zoom
 
 let isPanning = false;
 let panStartX = 0;
@@ -89,32 +100,37 @@ let canvasOffsetY = 0;
 let isPlacing = false;
 let placingPost = null;      // the post row (must include id)
 let placingCardEl = null;    // DOM element for the card being placed
-let placeMouseOffsetX = 0;   // center-of-card offset
+let placeMouseOffsetX = 0;   // center-of-card offset (canvas units)
 let placeMouseOffsetY = 0;
 
-const CARD_GAP = 10; // minimum gap between cards (px)
+const CARD_GAP = 10; // minimum gap between cards (px in canvas units)
 
 // ============================================
-// 0. CANVAS PANNING
+// 0. CANVAS PANNING / COORD HELPERS
 // ============================================
 
 function applyCanvasTransform() {
   if (!postCanvas) return;
-  postCanvas.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px)`;
+  postCanvas.style.transform = `translate(${canvasOffsetX}px, ${canvasOffsetY}px) scale(${canvasScale})`;
+  postCanvas.style.transformOrigin = '0 0';
+
+  // keep links in sync with pan/zoom
+  renderLinks(lastLoadedPosts, lastLoadedLinks);
 }
 
-// Convert viewport mouse coordinates to canvas coordinates (account for current pan)
+// Convert viewport mouse coordinates to canvas coordinates (account for current pan + zoom)
 function viewportPointToCanvasPoint(clientX, clientY) {
-  // postCanvas is translated by canvasOffsetX/Y, so subtract it to get canvas coords
+  // Inverse of: screen = (canvas * scale) + offset
   return {
-    x: clientX - canvasOffsetX,
-    y: clientY - canvasOffsetY
+    x: (clientX - canvasOffsetX) / canvasScale,
+    y: (clientY - canvasOffsetY) / canvasScale
   };
 }
 
 function getCardRectAt(cardEl, x, y) {
-  const w = cardEl.offsetWidth;
-  const h = cardEl.offsetHeight;
+  // offsetWidth/Height are unscaled layout px; convert to canvas units
+  const w = cardEl.offsetWidth / canvasScale;
+  const h = cardEl.offsetHeight / canvasScale;
   return { left: x, top: y, right: x + w, bottom: y + h };
 }
 
@@ -148,20 +164,25 @@ function startPlacement(post, cardEl, mouseEvent) {
   placingPost = post;
   placingCardEl = cardEl;
 
-  // Ensure it's on top while placing
   placingCardEl.style.zIndex = '20';
 
-  // Use center under cursor (feels nicest)
+  // center under cursor (canvas units)
   const w = placingCardEl.offsetWidth;
   const h = placingCardEl.offsetHeight;
-  placeMouseOffsetX = w / 2;
-  placeMouseOffsetY = h / 2;
+  placeMouseOffsetX = (w / 2) / canvasScale;
+  placeMouseOffsetY = (h / 2) / canvasScale;
+
+  placingCardEl.style.outline = '2px solid rgba(255,255,255,0.25)';
 
   // Position immediately
   updatePlacementPosition(mouseEvent);
 
-  // Optional: visually indicate placing
-  placingCardEl.style.outline = '2px solid rgba(255,255,255,0.25)';
+  // Reposition once after layout settles (images etc.)
+  requestAnimationFrame(() => {
+    if (isPlacing && placingCardEl === cardEl) {
+      updatePlacementPosition(mouseEvent);
+    }
+  });
 }
 
 function stopPlacement() {
@@ -187,6 +208,9 @@ function updatePlacementPosition(e) {
   // Preview valid/invalid
   const ok = canPlaceCardAt(placingCardEl, x, y);
   placingCardEl.style.opacity = ok ? '1' : '0.6';
+
+  // keep links in sync while dragging
+  renderLinks(lastLoadedPosts, lastLoadedLinks);
 }
 
 async function tryDropPlacement(e) {
@@ -196,11 +220,9 @@ async function tryDropPlacement(e) {
   const y = parseFloat(placingCardEl.style.top || '0');
 
   if (!canPlaceCardAt(placingCardEl, x, y)) {
-    // keep sticky until a valid spot
-    return;
+    return; // keep sticky until a valid spot
   }
 
-  // Save x/y to DB
   const { error } = await supabase
     .from('posts')
     .update({ x, y })
@@ -213,11 +235,11 @@ async function tryDropPlacement(e) {
     return;
   }
 
-  // Commit placement locally
   placingPost.x = x;
   placingPost.y = y;
 
   stopPlacement();
+  renderLinks(lastLoadedPosts, lastLoadedLinks);
 }
 
 // ============================================
@@ -225,35 +247,35 @@ async function tryDropPlacement(e) {
 // ============================================
 
 async function checkAuth() {
-    const { data: { session }, error } = await supabase.auth.getSession();
+  const { data: { session }, error } = await supabase.auth.getSession();
 
-    if (error) {
-        console.error('Failed to get session:', error);
-        return null;
-    }
+  if (error) {
+    console.error('Failed to get session:', error);
+    return null;
+  }
 
-    if (!session) {
-        window.location.href = './index.html';
-        return null;
-    }
+  if (!session) {
+    window.location.href = './index.html';
+    return null;
+  }
 
-    currentUser = session.user;
-    console.log('Logged in as:', currentUser.id);
+  currentUser = session.user;
+  console.log('Logged in as:', currentUser.id);
 
-    const { data, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', currentUser.id)
-        .single();
+  const { data, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', currentUser.id)
+    .single();
 
-    if (userError) {
-        console.error('Failed to fetch user data:', userError);
-        return null;
-    }
+  if (userError) {
+    console.error('Failed to fetch user data:', userError);
+    return null;
+  }
 
-    currentUserData = data;
-    console.log('User data loaded:', currentUserData.username);
-    return session;
+  currentUserData = data;
+  console.log('User data loaded:', currentUserData.username);
+  return session;
 }
 
 // ============================================
@@ -261,15 +283,15 @@ async function checkAuth() {
 // ============================================
 
 function getFileType(file) {
-    const mime = file?.type || '';
-    if (mime.startsWith('image/')) return 'image';
-    if (mime.startsWith('video/')) return 'video';
-    return 'other';
+  const mime = file?.type || '';
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  return 'other';
 }
 
 function isVisualFile(file) {
-    const type = getFileType(file);
-    return type === 'image' || type === 'video';
+  const type = getFileType(file);
+  return type === 'image' || type === 'video';
 }
 
 // ============================================
@@ -277,77 +299,81 @@ function isVisualFile(file) {
 // ============================================
 
 function openPostForm() {
-    postFormOverlay.style.display = 'flex';
+  postFormOverlay.style.display = 'flex';
 }
 
 function closePostForm() {
-    postFormOverlay.style.display = 'none';
-    postTitle.value = '';
-    postFileInput.value = '';
-    postFileName.textContent = 'choose file';
-    postText.value = '';
-    postCategory.value = '';
-    postCategory.style.display = 'block';
-    postCategoryInput.style.display = 'none';
-    postCategoryInput.value = '';
-    addCategoryToggle.textContent = '+';
-    editingPostId = null;
+  postFormOverlay.style.display = 'none';
+  postTitle.value = '';
+  postFileInput.value = '';
+  postFileName.textContent = 'choose file';
+  postText.value = '';
+  postCategory.value = '';
+  postCategory.style.display = 'block';
+  postCategoryInput.style.display = 'none';
+  postCategoryInput.value = '';
+  addCategoryToggle.textContent = '+';
+  editingPostId = null;
+
+  // clear pending link target
+  pendingLinkPostId = null;
 }
 
 function closeCoverImagePrompt() {
-    coverImageOverlay.style.display = 'none';
-    coverImageInput.value = '';
-    coverImageFileName.textContent = 'choose image';
-    pendingPost = null;
+  coverImageOverlay.style.display = 'none';
+  coverImageInput.value = '';
+  coverImageFileName.textContent = 'choose image';
+  pendingPost = null;
 }
 
+// (modal functions unchanged)
 function openPostDetailModal(post, user) {
-    activePostForModal = post;
+  activePostForModal = post;
 
-    const titleHtml = post.title ? `<div class="post-title">${post.title}</div>` : '';
-    const bodyHtml = post.body ? `<div class="post-body">${post.body}</div>` : '';
+  const titleHtml = post.title ? `<div class="post-title">${post.title}</div>` : '';
+  const bodyHtml = post.body ? `<div class="post-body">${post.body}</div>` : '';
 
-    let visualHtml = '';
-    if (post.file_type === 'image' && post.file_url) {
-        visualHtml = `<img class="post-image" src="${post.file_url}" alt="">`;
-    } else if (post.file_type === 'video' && post.file_url) {
-        visualHtml = `<video class="post-video" src="${post.file_url}" controls></video>`;
-    } else if (post.cover_image_url) {
-        visualHtml = `<img class="post-image" src="${post.cover_image_url}" alt="">`;
-    }
+  let visualHtml = '';
+  if (post.file_type === 'image' && post.file_url) {
+    visualHtml = `<img class="post-image" src="${post.file_url}" alt="">`;
+  } else if (post.file_type === 'video' && post.file_url) {
+    visualHtml = `<video class="post-video" src="${post.file_url}" controls></video>`;
+  } else if (post.cover_image_url) {
+    visualHtml = `<img class="post-image" src="${post.cover_image_url}" alt="">`;
+  }
 
-    let fileActionsHtml = '';
-    if (post.file_url && post.file_type === 'other') {
-        fileActionsHtml = `
-          <div class="post-file-actions" style="margin-top:10px;">
-            <a href="${post.file_url}" target="_blank" rel="noreferrer">view file</a>
-            <span style="opacity:0.4;"> | </span>
-            <a href="${post.file_url}" download>save file</a>
-          </div>
-        `;
-    }
-
-    postDetailContent.innerHTML = `
-      ${titleHtml}
-      ${visualHtml}
-      ${bodyHtml}
-      ${fileActionsHtml}
-      <div style="margin-top:10px; opacity:0.7;">
-        ${user?.username ? `posted by ${user.username}` : ''}
-        ${post.category ? ` • ${post.category}` : ''}
+  let fileActionsHtml = '';
+  if (post.file_url && post.file_type === 'other') {
+    fileActionsHtml = `
+      <div class="post-file-actions" style="margin-top:10px;">
+        <a href="${post.file_url}" target="_blank" rel="noreferrer">view file</a>
+        <span style="opacity:0.4;"> | </span>
+        <a href="${post.file_url}" download>save file</a>
       </div>
     `;
+  }
 
-    postDetailOverlay.style.display = 'flex';
-    loadCommentsForPost(post.id);
+  postDetailContent.innerHTML = `
+    ${titleHtml}
+    ${visualHtml}
+    ${bodyHtml}
+    ${fileActionsHtml}
+    <div style="margin-top:10px; opacity:0.7;">
+      ${user?.username ? `posted by ${user.username}` : ''}
+      ${post.category ? ` • ${post.category}` : ''}
+    </div>
+  `;
+
+  postDetailOverlay.style.display = 'flex';
+  loadCommentsForPost(post.id);
 }
 
 function closePostDetailModal() {
-    postDetailOverlay.style.display = 'none';
-    postDetailContent.innerHTML = '';
-    commentsList.innerHTML = '';
-    commentInput.value = '';
-    activePostForModal = null;
+  postDetailOverlay.style.display = 'none';
+  postDetailContent.innerHTML = '';
+  commentsList.innerHTML = '';
+  commentInput.value = '';
+  activePostForModal = null;
 }
 
 // ============================================
@@ -355,50 +381,49 @@ function closePostDetailModal() {
 // ============================================
 
 function toggleEditMode() {
-    editMode = !editMode;
-    console.log('Edit mode:', editMode ? 'ON' : 'OFF');
+  editMode = !editMode;
+  console.log('Edit mode:', editMode ? 'ON' : 'OFF');
 
-    // Clear filters whenever we toggle edit mode (so nothing "sticks")
-    activeUserFilter = null;
-    activeCategoryFilter = null;
+  activeUserFilter = null;
+  activeCategoryFilter = null;
 
-    if (editMode) {
-        mainPageContainer.classList.add('edit-mode');
-    } else {
-        mainPageContainer.classList.remove('edit-mode');
-    }
+  if (editMode) {
+    mainPageContainer.classList.add('edit-mode');
+  } else {
+    mainPageContainer.classList.remove('edit-mode');
+  }
 
-    loadPosts();
+  loadPosts();
 }
 
 function openEditForm(post) {
-    editingPostId = post.id;
+  editingPostId = post.id;
 
-    postTitle.value = post.title || '';
-    postText.value = post.body || '';
-    postCategory.value = post.category || '';
+  postTitle.value = post.title || '';
+  postText.value = post.body || '';
+  postCategory.value = post.category || '';
 
-    postFileName.textContent = post.file_name ? post.file_name : 'choose file';
+  postFileName.textContent = post.file_name ? post.file_name : 'choose file';
 
-    openPostForm();
+  openPostForm();
 }
 
 async function handleDeletePost(postId) {
-    try {
-        const { error } = await supabase
-            .from('posts')
-            .delete()
-            .eq('id', postId)
-            .eq('user_id', currentUser.id);
+  try {
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', postId)
+      .eq('user_id', currentUser.id);
 
-        if (error) throw error;
+    if (error) throw error;
 
-        console.log('Post deleted:', postId);
-        await loadPosts();
-    } catch (error) {
-        console.error('Delete failed:', error.message);
-        alert(`Delete failed: ${error.message}`);
-    }
+    console.log('Post deleted:', postId);
+    await loadPosts();
+  } catch (error) {
+    console.error('Delete failed:', error.message);
+    alert(`Delete failed: ${error.message}`);
+  }
 }
 
 // ============================================
@@ -406,55 +431,114 @@ async function handleDeletePost(postId) {
 // ============================================
 
 async function loadCategories() {
-    const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('group_id', 'group1')
-        .order('name', { ascending: true });
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('group_id', 'group1')
+    .order('name', { ascending: true });
 
-    if (error) {
-        console.error('Failed to load categories:', error);
-        return;
-    }
+  if (error) {
+    console.error('Failed to load categories:', error);
+    return;
+  }
 
-    postCategory.innerHTML = '<option value="">none</option>';
+  postCategory.innerHTML = '<option value="">none</option>';
 
-    data.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat.name;
-        option.textContent = cat.name;
-        postCategory.appendChild(option);
-    });
+  data.forEach(cat => {
+    const option = document.createElement('option');
+    option.value = cat.name;
+    option.textContent = cat.name;
+    postCategory.appendChild(option);
+  });
 
-    console.log(`Loaded ${data.length} categories`);
+  console.log(`Loaded ${data.length} categories`);
 }
 
 async function handleAddCategory() {
-    const name = postCategoryInput.value.trim();
-    if (!name) return;
+  const name = postCategoryInput.value.trim();
+  if (!name) return;
 
-    try {
-        const { error } = await supabase
-            .from('categories')
-            .insert([{ name: name, group_id: 'group1' }]);
+  try {
+    const { error } = await supabase
+      .from('categories')
+      .insert([{ name: name, group_id: 'group1' }]);
 
-        if (error) throw error;
+    if (error) throw error;
 
-        console.log('Category added:', name);
-        await loadCategories();
-        postCategory.value = name;
+    console.log('Category added:', name);
+    await loadCategories();
+    postCategory.value = name;
 
-        postCategory.style.display = 'block';
-        postCategoryInput.style.display = 'none';
-        postCategoryInput.value = '';
-        addCategoryToggle.textContent = '+';
-    } catch (error) {
-        alert(`Failed to add category: ${error.message}`);
-    }
+    postCategory.style.display = 'block';
+    postCategoryInput.style.display = 'none';
+    postCategoryInput.value = '';
+    addCategoryToggle.textContent = '+';
+  } catch (error) {
+    alert(`Failed to add category: ${error.message}`);
+  }
 }
 
 // ============================================
-// 6. POST SUBMISSION
+// 6. LINKS (post_links table)
+// ============================================
+
+async function loadLinks() {
+  const { data, error } = await supabase
+    .from('post_links')
+    .select('id, a_post_id, b_post_id')
+    .eq('group_id', 'group1');
+
+  if (error) {
+    console.error('Failed to load links:', error);
+    lastLoadedLinks = [];
+    return [];
+  }
+
+  lastLoadedLinks = data || [];
+  return lastLoadedLinks;
+}
+
+function renderLinks(posts, links) {
+  if (!linkLayer || !postCanvas) return;
+
+  linkLayer.innerHTML = '';
+
+  const postsById = new Map((posts || []).map(p => [String(p.id), p]));
+
+  for (const link of (links || [])) {
+    const a = postsById.get(String(link.a_post_id));
+    const b = postsById.get(String(link.b_post_id));
+    if (!a || !b) continue;
+
+    const aEl = postCanvas.querySelector(`.post-card[data-post-id="${a.id}"]`);
+    const bEl = postCanvas.querySelector(`.post-card[data-post-id="${b.id}"]`);
+    if (!aEl || !bEl) continue;
+
+    // centers in CANVAS coords
+    const ax = parseFloat(aEl.style.left || '0') + (aEl.offsetWidth / 2) / canvasScale;
+    const ay = parseFloat(aEl.style.top  || '0') + (aEl.offsetHeight / 2) / canvasScale;
+    const bx = parseFloat(bEl.style.left || '0') + (bEl.offsetWidth / 2) / canvasScale;
+    const by = parseFloat(bEl.style.top  || '0') + (bEl.offsetHeight / 2) / canvasScale;
+
+    // convert to viewport coords
+    const x1 = ax * canvasScale + canvasOffsetX;
+    const y1 = ay * canvasScale + canvasOffsetY;
+    const x2 = bx * canvasScale + canvasOffsetX;
+    const y2 = by * canvasScale + canvasOffsetY;
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1);
+    line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2);
+    line.setAttribute('y2', y2);
+    line.setAttribute('stroke', 'rgba(255,255,255,0.22)');
+    line.setAttribute('stroke-width', '2');
+    linkLayer.appendChild(line);
+  }
+}
+
+// ============================================
+// 7. POST SUBMISSION
 // ============================================
 
 async function handlePostSubmit() {
@@ -503,7 +587,7 @@ async function handlePostSubmit() {
       postRecord.file_type = fileType;
     }
 
-    // EDIT (update only; placement is via "reposition")
+    // EDIT
     if (editingPostId) {
       if (file && !isVisualFile(file)) {
         pendingPost = { ...postRecord, _isEdit: true, _editId: editingPostId };
@@ -536,9 +620,33 @@ async function handlePostSubmit() {
     }
 
     const created = await savePost(postRecord);
+
+    // If user right-clicked a post to open the form, connect them
+    if (pendingLinkPostId) {
+      const a = String(pendingLinkPostId);
+      const b = String(created.id);
+      const a_post_id = a < b ? a : b;
+      const b_post_id = a < b ? b : a;
+
+      const { error: linkErr } = await supabase
+        .from('post_links')
+        .insert([{
+          group_id: 'group1',
+          a_post_id,
+          b_post_id,
+          created_by: currentUser.id
+        }]);
+
+      if (linkErr) {
+        console.error('Failed to create link:', linkErr);
+      }
+    }
+
     closePostForm();
 
     await loadPosts();
+    await loadLinks();
+    renderLinks(lastLoadedPosts, lastLoadedLinks);
 
     const createdEl = postCanvas.querySelector(`.post-card[data-post-id="${created.id}"]`);
     if (createdEl) {
@@ -557,436 +665,428 @@ async function handlePostSubmit() {
 }
 
 // ============================================
-// 7. COVER IMAGE PROMPT
+// 8. COVER IMAGE PROMPT
 // ============================================
 
 async function handleCoverImageSubmit() {
-    if (!pendingPost) return;
+  if (!pendingPost) return;
 
-    const coverFile = coverImageInput.files[0];
-    if (!coverFile) {
-        alert('Choose an image or click skip');
-        return;
+  const coverFile = coverImageInput.files[0];
+  if (!coverFile) {
+    alert('Choose an image or click skip');
+    return;
+  }
+
+  try {
+    const filePath = `${currentUser.id}/covers/${Date.now()}-${coverFile.name}`;
+    const { error: uploadError } = await supabase.storage
+      .from('group1-posts')
+      .upload(filePath, coverFile);
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from('group1-posts')
+      .getPublicUrl(filePath);
+
+    pendingPost.cover_image_url = urlData.publicUrl;
+
+    if (pendingPost._isEdit) {
+      const editId = pendingPost._editId;
+      delete pendingPost._isEdit;
+      delete pendingPost._editId;
+      await updatePost(editId, pendingPost);
+    } else {
+      await savePost(pendingPost);
     }
 
-    try {
-        const filePath = `${currentUser.id}/covers/${Date.now()}-${coverFile.name}`;
-        const { error: uploadError } = await supabase.storage
-            .from('group1-posts')
-            .upload(filePath, coverFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-            .from('group1-posts')
-            .getPublicUrl(filePath);
-
-        pendingPost.cover_image_url = urlData.publicUrl;
-
-        if (pendingPost._isEdit) {
-            const editId = pendingPost._editId;
-            delete pendingPost._isEdit;
-            delete pendingPost._editId;
-            await updatePost(editId, pendingPost);
-        } else {
-            await savePost(pendingPost);
-        }
-
-        closeCoverImagePrompt();
-        await loadPosts();
-    } catch (error) {
-        console.error('Cover image upload failed:', error.message);
-        alert(`Cover image failed: ${error.message}`);
-    }
+    closeCoverImagePrompt();
+    await loadPosts();
+    await loadLinks();
+    renderLinks(lastLoadedPosts, lastLoadedLinks);
+  } catch (error) {
+    console.error('Cover image upload failed:', error.message);
+    alert(`Cover image failed: ${error.message}`);
+  }
 }
 
 async function handleCoverImageSkip() {
-    if (!pendingPost) return;
+  if (!pendingPost) return;
 
-    try {
-        if (pendingPost._isEdit) {
-            const editId = pendingPost._editId;
-            delete pendingPost._isEdit;
-            delete pendingPost._editId;
-            await updatePost(editId, pendingPost);
-        } else {
-            await savePost(pendingPost);
-        }
-
-        closeCoverImagePrompt();
-        await loadPosts();
-    } catch (error) {
-        console.error('Post save failed:', error.message);
-        alert(`Post failed: ${error.message}`);
+  try {
+    if (pendingPost._isEdit) {
+      const editId = pendingPost._editId;
+      delete pendingPost._isEdit;
+      delete pendingPost._editId;
+      await updatePost(editId, pendingPost);
+    } else {
+      await savePost(pendingPost);
     }
+
+    closeCoverImagePrompt();
+    await loadPosts();
+    await loadLinks();
+    renderLinks(lastLoadedPosts, lastLoadedLinks);
+  } catch (error) {
+    console.error('Post save failed:', error.message);
+    alert(`Post failed: ${error.message}`);
+  }
 }
 
 // ============================================
-// 8. SAVE / UPDATE POST
+// 9. SAVE / UPDATE POST
 // ============================================
 
 async function savePost(postRecord) {
-    const { data, error } = await supabase
-        .from('posts')
-        .insert([postRecord])
-        .select();
+  const { data, error } = await supabase
+    .from('posts')
+    .insert([postRecord])
+    .select();
 
-    if (error) throw error;
+  if (error) throw error;
 
-    console.log('Post saved:', data?.[0]?.id);
-    return data?.[0];
+  console.log('Post saved:', data?.[0]?.id);
+  return data?.[0];
 }
 
 async function updatePost(postId, updates) {
-    const { data, error } = await supabase
-        .from('posts')
-        .update(updates)
-        .eq('id', postId)
-        .eq('user_id', currentUser.id)
-        .select();
+  const { data, error } = await supabase
+    .from('posts')
+    .update(updates)
+    .eq('id', postId)
+    .eq('user_id', currentUser.id)
+    .select();
 
-    if (error) throw error;
+  if (error) throw error;
 
-    console.log('Post updated:', data?.[0]?.id);
-    return data?.[0];
+  console.log('Post updated:', data?.[0]?.id);
+  return data?.[0];
 }
 
 // ============================================
-// 9. COMMENTS
+// 10. COMMENTS (unchanged)
 // ============================================
 
 async function loadCommentsForPost(postId) {
-    const { data: comments, error } = await supabase
-        .from('comments')
-        .select('id, body, created_at, user_id')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true });
+  const { data: comments, error } = await supabase
+    .from('comments')
+    .select('id, body, created_at, user_id')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
 
-    if (error) {
-        console.error('Failed to load comments:', error);
-        commentsList.innerHTML = `<div style="opacity:0.7;">failed to load comments</div>`;
-        return;
+  if (error) {
+    console.error('Failed to load comments:', error);
+    commentsList.innerHTML = `<div style="opacity:0.7;">failed to load comments</div>`;
+    return;
+  }
+
+  const commentUserIds = [...new Set((comments || []).map(c => c.user_id).filter(Boolean))];
+
+  let commentUsers = [];
+  if (commentUserIds.length > 0) {
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('id, username')
+      .in('id', commentUserIds);
+
+    if (usersError) {
+      console.error('Failed to load comment users:', usersError);
+    } else {
+      commentUsers = users || [];
     }
+  }
 
-    const commentUserIds = [...new Set((comments || []).map(c => c.user_id).filter(Boolean))];
+  const commentUserMap = {};
+  commentUsers.forEach(u => { commentUserMap[u.id] = u; });
 
-    let commentUsers = [];
-    if (commentUserIds.length > 0) {
-        const { data: users, error: usersError } = await supabase
-            .from('users')
-            .select('id, username')
-            .in('id', commentUserIds);
+  commentsList.innerHTML = '';
 
-        if (usersError) {
-            console.error('Failed to load comment users:', usersError);
-        } else {
-            commentUsers = users || [];
-        }
-    }
+  if (!comments || comments.length === 0) {
+    commentsList.innerHTML = `<div style="opacity:0.7;">no comments yet</div>`;
+    return;
+  }
 
-    const commentUserMap = {};
-    commentUsers.forEach(u => { commentUserMap[u.id] = u; });
+  comments.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'comment-row';
 
-    commentsList.innerHTML = '';
+    const uname = commentUserMap[c.user_id]?.username || 'unknown';
 
-    if (!comments || comments.length === 0) {
-        commentsList.innerHTML = `<div style="opacity:0.7;">no comments yet</div>`;
-        return;
-    }
+    row.innerHTML = `
+      <div class="comment-username">${uname}</div>
+      <div class="comment-body">${c.body}</div>
+    `;
 
-    comments.forEach(c => {
-        const row = document.createElement('div');
-        row.className = 'comment-row';
-
-        const uname = commentUserMap[c.user_id]?.username || 'unknown';
-
-        row.innerHTML = `
-          <div class="comment-username">${uname}</div>
-          <div class="comment-body">${c.body}</div>
-        `;
-
-        commentsList.appendChild(row);
-    });
+    commentsList.appendChild(row);
+  });
 }
 
 async function submitComment() {
-    if (!activePostForModal) return;
+  if (!activePostForModal) return;
 
-    const text = commentInput.value.trim();
-    if (!text) return;
+  const text = commentInput.value.trim();
+  if (!text) return;
 
-    const { error } = await supabase
-        .from('comments')
-        .insert([{
-            post_id: activePostForModal.id,
-            user_id: currentUser.id,
-            body: text
-        }]);
+  const { error } = await supabase
+    .from('comments')
+    .insert([{
+      post_id: activePostForModal.id,
+      user_id: currentUser.id,
+      body: text
+    }]);
 
-    if (error) {
-        console.error('Failed to post comment:', error);
-        alert(`Comment failed: ${error.message}`);
-        return;
-    }
+  if (error) {
+    console.error('Failed to post comment:', error);
+    alert(`Comment failed: ${error.message}`);
+    return;
+  }
 
-    commentInput.value = '';
-    await loadCommentsForPost(activePostForModal.id);
+  commentInput.value = '';
+  await loadCommentsForPost(activePostForModal.id);
 
-    postDetailModal.scrollTop = postDetailModal.scrollHeight;
+  postDetailModal.scrollTop = postDetailModal.scrollHeight;
 }
 
 // ============================================
-// 10. LOAD AND RENDER POSTS (canvas)
+// 11. LOAD AND RENDER POSTS (canvas)
 // ============================================
 
 async function loadPosts() {
-    try {
-        let query = supabase
-            .from('posts')
-            .select('*')
-            .eq('group_id', 'group1')
-            .order('created_at', { ascending: false });
+  try {
+    let query = supabase
+      .from('posts')
+      .select('*')
+      .eq('group_id', 'group1')
+      .order('created_at', { ascending: false });
 
-        if (editMode) {
-            query = query.eq('user_id', currentUser.id);
+    if (editMode) {
+      query = query.eq('user_id', currentUser.id);
+    } else {
+      if (activeUserFilter) {
+        query = query.eq('user_id', activeUserFilter);
+      }
+      if (activeCategoryFilter) {
+        if (activeCategoryFilter === NONE_CATEGORY_FILTER) {
+          query = query.is('category', null);
         } else {
-            if (activeUserFilter) {
-                query = query.eq('user_id', activeUserFilter);
-            }
-            if (activeCategoryFilter) {
-                if (activeCategoryFilter === NONE_CATEGORY_FILTER) {
-                    query = query.is('category', null);
-                } else {
-                    query = query.eq('category', activeCategoryFilter);
-                }
-            }
+          query = query.eq('category', activeCategoryFilter);
         }
-
-        const { data: posts, error } = await query;
-
-        if (error) {
-            console.error('Failed to load posts:', error);
-            return;
-        }
-
-        const userIds = [...new Set((posts || []).map(p => p.user_id).filter(Boolean))];
-
-        let users = [];
-        if (userIds.length > 0) {
-            const { data, error: usersError } = await supabase
-                .from('users')
-                .select('id, username, pfp, pfp_url')
-                .in('id', userIds);
-
-            if (usersError) {
-                console.error('Failed to load users:', usersError);
-                return;
-            }
-            users = data || [];
-        }
-
-        const userMap = {};
-        users.forEach(u => { userMap[u.id] = u; });
-
-        if (!postCanvas) {
-            console.error('postCanvas element not found. Check your HTML wrapper.');
-            return;
-        }
-
-        postCanvas.innerHTML = '';
-
-        // Reset fallback layout counter for stable positioning on refresh
-        buildPostCard._indexCounter = 0;
-
-        (posts || []).forEach(post => {
-            const user = userMap[post.user_id] || {};
-            const card = buildPostCard(post, user);
-            postCanvas.appendChild(card);
-        });
-
-        console.log(`Loaded ${posts?.length || 0} posts`);
-    } catch (err) {
-        console.error('loadPosts crashed:', err);
+      }
     }
+
+    const { data: posts, error } = await query;
+
+    if (error) {
+      console.error('Failed to load posts:', error);
+      return;
+    }
+
+    lastLoadedPosts = posts || [];
+
+    const userIds = [...new Set((posts || []).map(p => p.user_id).filter(Boolean))];
+
+    let users = [];
+    if (userIds.length > 0) {
+      const { data, error: usersError } = await supabase
+        .from('users')
+        .select('id, username, pfp, pfp_url')
+        .in('id', userIds);
+
+      if (usersError) {
+        console.error('Failed to load users:', usersError);
+        return;
+      }
+      users = data || [];
+    }
+
+    const userMap = {};
+    users.forEach(u => { userMap[u.id] = u; });
+
+    if (!postCanvas) {
+      console.error('postCanvas element not found. Check your HTML wrapper.');
+      return;
+    }
+
+    postCanvas.innerHTML = '';
+
+    buildPostCard._indexCounter = 0;
+
+    (posts || []).forEach(post => {
+      const user = userMap[post.user_id] || {};
+      const card = buildPostCard(post, user);
+      postCanvas.appendChild(card);
+    });
+
+    console.log(`Loaded ${posts?.length || 0} posts`);
+
+    // re-render links if we already have them
+    renderLinks(lastLoadedPosts, lastLoadedLinks);
+  } catch (err) {
+    console.error('loadPosts crashed:', err);
+  }
 }
 
 // ============================================
-// 11. POST CARD BUILDER (now includes absolute placement)
+// 12. POST CARD BUILDER
 // ============================================
 
 function buildPostCard(post, user) {
-    const card = document.createElement('div');
-    card.className = 'post-card';
-    card.dataset.postId = post.id;
+  const card = document.createElement('div');
+  card.className = 'post-card';
+  card.dataset.postId = post.id;
 
+  const idx = (buildPostCard._indexCounter || 0);
+  buildPostCard._indexCounter = idx + 1;
 
-    // ---- absolute placement (fallback if x/y are null) ----
-    const idx = (buildPostCard._indexCounter || 0);
-    buildPostCard._indexCounter = idx + 1;
+  const fallbackX = 60 + (idx % 4) * 340;
+  const fallbackY = 60 + Math.floor(idx / 4) * 280;
 
-    const fallbackX = 60 + (idx % 4) * 340;
-    const fallbackY = 60 + Math.floor(idx / 4) * 280;
+  const x = (post.x ?? fallbackX);
+  const y = (post.y ?? fallbackY);
 
-    const x = (post.x ?? fallbackX);
-    const y = (post.y ?? fallbackY);
+  card.style.left = `${x}px`;
+  card.style.top = `${y}px`;
 
-    card.style.left = `${x}px`;
-    card.style.top = `${y}px`;
+  const hasTitle = post.title && post.title.trim();
+  const hasText = post.body && post.body.trim();
 
-    // ------------------------------------------------------
+  const hasVisual = !!post.file_url && (
+    post.file_type === 'image' ||
+    post.file_type === 'video' ||
+    !!post.cover_image_url
+  );
 
-    const hasTitle = post.title && post.title.trim();
-    const hasText = post.body && post.body.trim();
+  let visualSrc = null;
+  if (post.file_type === 'image') {
+    visualSrc = post.file_url;
+  } else if (post.cover_image_url) {
+    visualSrc = post.cover_image_url;
+  }
 
-    const hasVisual = !!post.file_url && (
-        post.file_type === 'image' ||
-        post.file_type === 'video' ||
-        !!post.cover_image_url
-    );
+  const content = document.createElement('div');
+  content.className = 'post-card-content';
 
-    let visualSrc = null;
-    if (post.file_type === 'image') {
-        visualSrc = post.file_url;
-    } else if (post.cover_image_url) {
-        visualSrc = post.cover_image_url;
+  if (hasTitle && hasVisual && hasText) {
+    content.classList.add('post-layout-title-visual-text');
+    content.innerHTML = `
+      <div class="post-title">${post.title}</div>
+      <div class="post-visual-text-row">
+        <img class="post-image" src="${visualSrc}" alt="">
+        <div class="post-body">${post.body}</div>
+      </div>
+    `;
+  } else if (hasTitle && hasVisual) {
+    content.classList.add('post-layout-title-visual');
+    content.innerHTML = `
+      <div class="post-title">${post.title}</div>
+      <img class="post-image" src="${visualSrc}" alt="">
+    `;
+  } else if (hasTitle && hasText) {
+    content.classList.add('post-layout-title-text');
+    content.innerHTML = `
+      <div class="post-title">${post.title}</div>
+      <div class="post-body">${post.body}</div>
+    `;
+  } else if (hasVisual) {
+    content.classList.add('post-layout-visual');
+    content.innerHTML = `
+      <img class="post-image" src="${visualSrc}" alt="">
+    `;
+  } else if (hasTitle) {
+    content.classList.add('post-layout-title');
+    content.innerHTML = `<div class="post-title">${post.title}</div>`;
+  } else if (hasText) {
+    content.classList.add('post-layout-text');
+    content.innerHTML = `<div class="post-body">${post.body}</div>`;
+  }
+
+  card.appendChild(content);
+
+  const footer = document.createElement('div');
+  footer.className = 'post-footer';
+
+  const pfpFallback = './images/pfps/default.png';
+  const pfpSrc = user?.pfp_url || (user?.pfp ? `./images/pfps/${user.pfp}` : pfpFallback);
+
+  if (editMode) {
+    footer.innerHTML = `
+      <img class="post-footer-pfp" src="${pfpSrc}" alt="">
+      <span class="post-footer-action post-footer-edit">edit</span>
+      <span class="post-footer-action post-footer-reposition">reposition</span>
+      <span class="post-footer-action post-footer-delete">delete</span>
+      ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
+      <span class="post-footer-category">${post.category || 'none'}</span>
+    `;
+
+    footer.querySelector('.post-footer-edit')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditForm(post);
+    });
+
+    footer.querySelector('.post-footer-delete')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleDeletePost(post.id);
+    });
+
+    footer.querySelector('.post-footer-reposition')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startPlacement(post, card, window.__lastMouseEventForPlacement || { clientX: 200, clientY: 200 });
+    });
+  } else {
+    footer.innerHTML = `
+      <img class="post-footer-pfp" src="${pfpSrc}" alt="">
+      <span class="post-footer-username post-footer-filter-btn">${user?.username || 'unknown'}</span>
+      ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
+      <span class="post-footer-category post-footer-filter-btn">${post.category || 'none'}</span>
+    `;
+
+    const usernameEl = footer.querySelector('.post-footer-username');
+    if (usernameEl && user?.id) {
+      usernameEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activeUserFilter = (activeUserFilter === user.id) ? null : user.id;
+        loadPosts();
+      });
     }
 
-    // Content
-    const content = document.createElement('div');
-    content.className = 'post-card-content';
-
-    if (hasTitle && hasVisual && hasText) {
-        content.classList.add('post-layout-title-visual-text');
-        content.innerHTML = `
-            <div class="post-title">${post.title}</div>
-            <div class="post-visual-text-row">
-                <img class="post-image" src="${visualSrc}" alt="">
-                <div class="post-body">${post.body}</div>
-            </div>
-        `;
-    } else if (hasTitle && hasVisual) {
-        content.classList.add('post-layout-title-visual');
-        content.innerHTML = `
-            <div class="post-title">${post.title}</div>
-            <img class="post-image" src="${visualSrc}" alt="">
-        `;
-    } else if (hasTitle && hasText) {
-        content.classList.add('post-layout-title-text');
-        content.innerHTML = `
-            <div class="post-title">${post.title}</div>
-            <div class="post-body">${post.body}</div>
-        `;
-    } else if (hasVisual) {
-        content.classList.add('post-layout-visual');
-        content.innerHTML = `
-            <img class="post-image" src="${visualSrc}" alt="">
-        `;
-    } else if (hasTitle) {
-        content.classList.add('post-layout-title');
-        content.innerHTML = `<div class="post-title">${post.title}</div>`;
-    } else if (hasText) {
-        content.classList.add('post-layout-text');
-        content.innerHTML = `<div class="post-body">${post.body}</div>`;
+    const categoryEl = footer.querySelector('.post-footer-category');
+    if (categoryEl) {
+      categoryEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isNone = post.category == null;
+        const nextFilter = isNone ? NONE_CATEGORY_FILTER : post.category;
+        activeCategoryFilter = (activeCategoryFilter === nextFilter) ? null : nextFilter;
+        loadPosts();
+      });
     }
+  }
 
-    card.appendChild(content);
+  card.appendChild(footer);
 
-    // Footer
-    const footer = document.createElement('div');
-    footer.className = 'post-footer';
-
-    const pfpFallback = './images/pfps/default.png';
-    const pfpSrc = user?.pfp_url || (user?.pfp ? `./images/pfps/${user.pfp}` : pfpFallback);
-
-    if (editMode) {
-        footer.innerHTML = `
-            <img class="post-footer-pfp" src="${pfpSrc}" alt="">
-            <span class="post-footer-action post-footer-edit">edit</span>
-            <span class="post-footer-action post-footer-reposition">reposition</span>
-            <span class="post-footer-action post-footer-delete">delete</span>
-            ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
-            <span class="post-footer-category">${post.category || 'none'}</span>
-        `;
-
-        footer.querySelector('.post-footer-edit')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openEditForm(post);
-        });
-
-        footer.querySelector('.post-footer-delete')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            handleDeletePost(post.id);
-        });
-
-        footer.querySelector('.post-footer-reposition')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-
-            // start placement using current mouse position
-            startPlacement(post, card, window.__lastMouseEventForPlacement || { clientX: 200, clientY: 200 });
-            });
-
-    } else {
-        footer.innerHTML = `
-            <img class="post-footer-pfp" src="${pfpSrc}" alt="">
-            <span class="post-footer-username post-footer-filter-btn">${user?.username || 'unknown'}</span>
-            ${post.file_name ? `<span class="post-footer-filename">${post.file_name}</span>` : ''}
-            <span class="post-footer-category post-footer-filter-btn">${post.category || 'none'}</span>
-        `;
-
-        // username filter
-        const usernameEl = footer.querySelector('.post-footer-username');
-        if (usernameEl && user?.id) {
-            usernameEl.addEventListener('click', (e) => {
-                e.stopPropagation();
-                activeUserFilter = (activeUserFilter === user.id) ? null : user.id;
-                loadPosts();
-            });
-        }
-
-        // category filter (supports none/null)
-        const categoryEl = footer.querySelector('.post-footer-category');
-        if (categoryEl) {
-            categoryEl.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const isNone = post.category == null;
-                const nextFilter = isNone ? NONE_CATEGORY_FILTER : post.category;
-                activeCategoryFilter = (activeCategoryFilter === nextFilter) ? null : nextFilter;
-                loadPosts();
-            });
-        }
-    }
-
-    card.appendChild(footer);
-
-    // Card click opens modal
-   card.addEventListener('click', (e) => {
+  card.addEventListener('click', (e) => {
     if (isPlacing) return;
     if (e.target.closest('.post-footer-action')) return;
     openPostDetailModal(post, user);
-    });
+  });
 
-    return card;
+  return card;
 }
 
 // ============================================
-// 12. INITIALIZE EVENT LISTENERS
+// 13. INITIALIZE EVENT LISTENERS
 // ============================================
 
 function initializeEventListeners() {
-
-    window.addEventListener('mousemove', (e) => {
+  window.addEventListener('mousemove', (e) => {
     window.__lastMouseEventForPlacement = e;
-    });
+  });
 
-    const canvasViewport = document.getElementById('canvasViewport');
+  const canvasViewport = document.getElementById('canvasViewport');
 
-    // Pan by dragging empty space
-    canvasViewport.addEventListener('mousedown', (e) => {
-    // only left click
+  // Pan by dragging empty space
+  canvasViewport.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     if (isPlacing) return;
-
-    // if clicked on a post card, don't pan (we'll use that later for placement drag)
     if (e.target.closest('.post-card')) return;
 
     isPanning = true;
@@ -994,167 +1094,189 @@ function initializeEventListeners() {
     panStartY = e.clientY;
     panStartOffsetX = canvasOffsetX;
     panStartOffsetY = canvasOffsetY;
-    });
+  });
 
-    window.addEventListener('mousemove', (e) => {
+  window.addEventListener('mousemove', (e) => {
     if (!isPanning) return;
     const dx = e.clientX - panStartX;
     const dy = e.clientY - panStartY;
     canvasOffsetX = panStartOffsetX + dx;
     canvasOffsetY = panStartOffsetY + dy;
     applyCanvasTransform();
-    });
+  });
 
-    window.addEventListener('mouseup', () => {
+  window.addEventListener('mouseup', () => {
     isPanning = false;
-    });
+  });
 
-    window.addEventListener('mousemove', (e) => {
+  window.addEventListener('mousemove', (e) => {
     if (isPlacing) updatePlacementPosition(e);
-    });
+  });
 
-    window.addEventListener('mousedown', async (e) => {
+  window.addEventListener('mousedown', async (e) => {
     if (!isPlacing) return;
-    if (e.button !== 0) return; // left click drops
+    if (e.button !== 0) return;
     await tryDropPlacement(e);
-    });
-        
+  });
 
-    // Right-click: single = open/close form, double = toggle edit mode
-    (canvasViewport || mainPageContainer).addEventListener('contextmenu', (e) => {
-        e.preventDefault();
+  // Right-click: single = open/close form, double = toggle edit mode
+  (canvasViewport || mainPageContainer).addEventListener('contextmenu', (e) => {
+    e.preventDefault();
 
-        const now = Date.now();
-        const timeSince = now - lastRightClick;
-        lastRightClick = now;
+    const now = Date.now();
+    const timeSince = now - lastRightClick;
+    lastRightClick = now;
 
-        const isFormOpen = postFormOverlay.style.display === 'flex';
+    const isFormOpen = postFormOverlay.style.display === 'flex';
 
-        // Double right-click: toggle edit mode
-        if (timeSince < DOUBLE_CLICK_THRESHOLD) {
-            lastRightClick = 0;
-            closePostForm();
-            toggleEditMode();
-            return;
-        }
+    if (timeSince < DOUBLE_CLICK_THRESHOLD) {
+      lastRightClick = 0;
+      closePostForm();
+      toggleEditMode();
+      return;
+    }
 
-        // Single right-click behavior (delayed so we can detect double)
-        setTimeout(() => {
-            if (lastRightClick !== now) return;
+    // if right-clicked on a post, next created post links to it
+    const clickedCard = e.target.closest('.post-card');
+    pendingLinkPostId = clickedCard ? clickedCard.dataset.postId : null;
 
-            if (isFormOpen) {
-                closePostForm();
-                return;
-            }
+    setTimeout(() => {
+      if (lastRightClick !== now) return;
 
-            if (!editMode) {
-                openPostForm();
-            }
-        }, DOUBLE_CLICK_THRESHOLD);
-    });
+      if (isFormOpen) {
+        closePostForm();
+        return;
+      }
 
-    // Cancel button closes form
-    postCancelBtn.addEventListener('click', closePostForm);
+      if (!editMode) {
+        openPostForm();
+      }
+    }, DOUBLE_CLICK_THRESHOLD);
+  });
 
-    // Click overlay background to close
-    postFormOverlay.addEventListener('click', (e) => {
-        if (e.target === postFormOverlay) closePostForm();
-    });
+  // Wheel zoom (disable during placement to keep it stable)
+  canvasViewport.addEventListener('wheel', (e) => {
+    if (isPlacing) {
+      e.preventDefault();
+      return;
+    }
 
-    // File input display name
-    postFileInput.addEventListener('change', () => {
-        postFileName.textContent = postFileInput.files[0] ? postFileInput.files[0].name : 'choose file';
-    });
+    e.preventDefault();
 
-    // Submit post
-    postSubmitBtn.addEventListener('click', handlePostSubmit);
+    const delta = e.deltaY;
+    const zoomFactor = Math.exp(-delta * ZOOM_SENSITIVITY);
 
-    // Category toggle
-    addCategoryToggle.addEventListener('click', () => {
-        if (postCategory.style.display !== 'none') {
-            postCategory.style.display = 'none';
-            postCategoryInput.style.display = 'block';
-            postCategoryInput.value = '';
-            postCategoryInput.focus();
-            addCategoryToggle.textContent = '×';
-        } else {
-            postCategory.style.display = 'block';
-            postCategoryInput.style.display = 'none';
-            postCategoryInput.value = '';
-            addCategoryToggle.textContent = '+';
-        }
-    });
+    const oldScale = canvasScale;
+    let newScale = oldScale * zoomFactor;
+    newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+    if (newScale === oldScale) return;
 
-    // Enter key in category input
-    postCategoryInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleAddCategory();
-        }
-    });
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
 
-    // Cover image prompt listeners
-    coverImageInput.addEventListener('change', () => {
-        coverImageFileName.textContent = coverImageInput.files[0] ? coverImageInput.files[0].name : 'choose image';
-    });
+    const before = viewportPointToCanvasPoint(mouseX, mouseY);
 
-    coverImageSubmitBtn.addEventListener('click', handleCoverImageSubmit);
-    coverImageSkipBtn.addEventListener('click', handleCoverImageSkip);
+    canvasScale = newScale;
 
-    // Logout
-    logoutBtn?.addEventListener('click', async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            alert(`Logout failed: ${error.message}`);
-            return;
-        }
-        window.location.href = './index.html';
-    });
+    canvasOffsetX = mouseX - before.x * canvasScale;
+    canvasOffsetY = mouseY - before.y * canvasScale;
 
-    // Modal close
-    postDetailClose?.addEventListener('click', closePostDetailModal);
-    postDetailOverlay?.addEventListener('click', (e) => {
-        if (e.target === postDetailOverlay) closePostDetailModal();
-    });
+    applyCanvasTransform();
+  }, { passive: false });
 
-    // Comment submit
-    commentSubmitBtn?.addEventListener('click', submitComment);
-    commentInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            submitComment();
-        }
-    });
+  postCancelBtn.addEventListener('click', closePostForm);
 
-    // Escape key handling
-    document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
+  postFormOverlay.addEventListener('click', (e) => {
+    if (e.target === postFormOverlay) closePostForm();
+  });
 
-        if (postDetailOverlay?.style.display === 'flex') {
-            closePostDetailModal();
-        } else if (editMode) {
-            toggleEditMode();
-        } else if (postFormOverlay?.style.display === 'flex') {
-            closePostForm();
-        } else if (coverImageOverlay?.style.display === 'flex') {
-            closeCoverImagePrompt();
-        }
-    });
+  postFileInput.addEventListener('change', () => {
+    postFileName.textContent = postFileInput.files[0] ? postFileInput.files[0].name : 'choose file';
+  });
+
+  postSubmitBtn.addEventListener('click', handlePostSubmit);
+
+  addCategoryToggle.addEventListener('click', () => {
+    if (postCategory.style.display !== 'none') {
+      postCategory.style.display = 'none';
+      postCategoryInput.style.display = 'block';
+      postCategoryInput.value = '';
+      postCategoryInput.focus();
+      addCategoryToggle.textContent = '×';
+    } else {
+      postCategory.style.display = 'block';
+      postCategoryInput.style.display = 'none';
+      postCategoryInput.value = '';
+      addCategoryToggle.textContent = '+';
+    }
+  });
+
+  postCategoryInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddCategory();
+    }
+  });
+
+  coverImageInput.addEventListener('change', () => {
+    coverImageFileName.textContent = coverImageInput.files[0] ? coverImageInput.files[0].name : 'choose image';
+  });
+
+  coverImageSubmitBtn.addEventListener('click', handleCoverImageSubmit);
+  coverImageSkipBtn.addEventListener('click', handleCoverImageSkip);
+
+  logoutBtn?.addEventListener('click', async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      alert(`Logout failed: ${error.message}`);
+      return;
+    }
+    window.location.href = './index.html';
+  });
+
+  postDetailClose?.addEventListener('click', closePostDetailModal);
+  postDetailOverlay?.addEventListener('click', (e) => {
+    if (e.target === postDetailOverlay) closePostDetailModal();
+  });
+
+  commentSubmitBtn?.addEventListener('click', submitComment);
+  commentInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitComment();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+
+    if (postDetailOverlay?.style.display === 'flex') {
+      closePostDetailModal();
+    } else if (editMode) {
+      toggleEditMode();
+    } else if (postFormOverlay?.style.display === 'flex') {
+      closePostForm();
+    } else if (coverImageOverlay?.style.display === 'flex') {
+      closeCoverImagePrompt();
+    }
+  });
 }
 
 // ============================================
-// 13. INITIALIZATION
+// 14. INITIALIZATION
 // ============================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Main page loaded');
+  console.log('Main page loaded');
 
-    const session = await checkAuth();
-    if (!session) return;
+  const session = await checkAuth();
+  if (!session) return;
 
-    initializeEventListeners();
-    await loadCategories();
-    await loadPosts();
+  initializeEventListeners();
+  await loadCategories();
+  await loadPosts();
+  await loadLinks();
+  renderLinks(lastLoadedPosts, lastLoadedLinks);
 
-    console.log('Main page ready');
+  console.log('Main page ready');
 });
