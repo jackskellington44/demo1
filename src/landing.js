@@ -217,8 +217,7 @@ async function handleLogin() {
         if (error) throw error;
         
         console.log('Login successful:', data.user.id);
-        window.location.href = './';
-
+        window.location.href = './main.html';
         
         // TODO: Redirect to dashboard
     } catch (error) {
@@ -285,8 +284,7 @@ async function handleSignup() {
 
         // Everything done, NOW redirect
         console.log('ALL DONE - redirecting');
-        window.location.href = './';
-
+        window.location.href = './main.html';
 
     } catch (error) {
         console.error('Signup error:', error.message);
