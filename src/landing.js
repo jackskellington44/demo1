@@ -25,7 +25,7 @@ function loadPFPGrid() {
         container.dataset.pfp = pfp;
         
         const img = document.createElement('img');
-        img.src = `./images/pfps/${pfp}`;
+        img.src = `${import.meta.env.BASE_URL}images/pfps/${pfp}`;
         img.alt = pfp;
         
         container.appendChild(img);
