@@ -3,11 +3,11 @@
 /* ============================================ */
 
 :root {
-    --font-size-base: 16px;
-    --font-size-sm: 0.875rem;
-    --font-size-md: 1rem;
-    --font-size-lg: 1.5rem;
-    --font-size-xl: 2rem;
+    --font-size-base: 0.875rem;
+    --font-size-sm: 1rem;
+    --font-size-md: 1.5rem;
+    --font-size-lg: 2rem;
+    --font-size-xl: 2.5rem;
     --font-size-2xl: 3rem;
     --font-size-3xl: 4rem;
     --font-size-4xl: 5rem;
@@ -17,9 +17,9 @@
     --font-size-pfp-plus: clamp(2rem, 4vw, 3.125rem);
 
     /* Post card sizes - matches login/signup styling */
-    --post-title-size: var(--font-size-lg);
-    --post-body-size: calc(var(--font-size-lg) / 2);
-    --post-footer-size: var(--font-size-sm);
+    --post-title-size: var(--font-size-xl);
+    --post-body-size: calc(var(--font-size-md));
+    --post-footer-size: var(--font-size-lg);
 
     --bg-url: url("./images/background.jpg");
 
@@ -183,7 +183,7 @@ body {
 .view-toggle.active {
     text-decoration: underline;
     text-decoration-thickness: 2px;
-    text-underline-offset: 5px;
+    text-underline-offset: 0px;
     text-decoration-color: rgba(0, 0, 0, 0.5);
     opacity: 1;
     color: rgb(0, 0, 0);
@@ -407,10 +407,11 @@ input[type=number]::-webkit-outer-spin-button {
     border-bottom: 2px solid rgba(255, 255, 255, 0.5);
     color: rgba(255, 255, 255, 0.5);
     font-size: var(--font-size-md);
-    font-family: inherit;
+    font-style: italic;
     cursor: pointer;
     padding: 5px 0;
 }
+
 
 .post-form-file-label:hover {
     color: rgba(255, 255, 255, 0.8);
@@ -491,7 +492,6 @@ input[type=number]::-webkit-outer-spin-button {
     font-family: inherit;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 /* ============================================ */
@@ -549,53 +549,359 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 /* --- TITLE + VISUAL --- */
-.post-layout-title-visual .post-title {
-    margin-bottom: 8px;
-}
-
-.post-layout-title-visual .post-image {
-    max-height: 400px;
-}
-
-/* --- TITLE + VISUAL + TEXT (side by side) --- */
+/* --- TITLE + VISUAL + TEXT --- */
 .post-layout-title-visual-text .post-title {
     margin-bottom: 8px;
 }
 
+/* short text = stacked */
 .post-visual-text-row {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     gap: 12px;
     align-items: flex-start;
 }
 
-.post-visual-text-row .post-image {
-    width: 50%;
-    max-height: 300px;
-    object-fit: cover;
+.post-visual-text-row .post-body,
+.post-visual-text-row .post-image,
+.post-visual-text-row .post-file-preview {
+    width: 300px;
+    max-width: 100%;
+}
+
+.post-visual-text-row .post-image,
+.post-visual-text-row .post-file-preview {
+    height: 300px;
     flex-shrink: 0;
 }
 
+.post-visual-text-row .post-image {
+    object-fit: cover;
+    display: block;
+}
+
 .post-visual-text-row .post-body {
-    width: 50%;
+    line-height: 1.5;
+}
+
+/* long text = side by side */
+.post-layout-title-visual-text.is-long-text .post-visual-text-row {
+    flex-direction: row;
+    align-items: stretch;
+}
+
+.post-layout-title-visual-text.is-long-text .post-visual-text-row .post-body {
+    position: relative;
+    height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 12px;
+    line-height: 1.5;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0,0,0,0.2) 3%,
+    rgba(0,0,0,0.5) 6%,
+    rgba(0,0,0,0.8) 9%,
+    black 14%,
+    black 82%,
+    transparent 100%
+);
+mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0,0,0,0.2) 3%,
+    rgba(0,0,0,0.5) 6%,
+    rgba(0,0,0,0.8) 9%,
+    black 14%,
+    black 82%,
+    transparent 100%
+);
+}
+
+.post-layout-title-visual-text.is-long-text .post-visual-text-row .post-body::-webkit-scrollbar {
+    display: none;
+}
+
+/* long text, no file: same overall width as 300 + 12 + 300 */
+.post-layout-title-text.is-long-text .post-body {
+    width: 612px;
+    max-width: 100%;
+    height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    line-height: 1.5;
+    padding-right: 12px;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(0,0,0,0.2) 3%,
+        rgba(0,0,0,0.5) 6%,
+        rgba(0,0,0,0.8) 9%,
+        black 14%,
+        black 82%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(0,0,0,0.2) 3%,
+        rgba(0,0,0,0.5) 6%,
+        rgba(0,0,0,0.8) 9%,
+        black 14%,
+        black 82%,
+        transparent 100%
+    );
+}
+
+.post-layout-title-text.is-long-text .post-body::-webkit-scrollbar {
+    display: none;
+}
+
+.post-title {
+    position: relative;
+    width: 612px;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+
+.post-title-track {
+    display: inline-block;
+    min-width: 100%;
+    white-space: nowrap;
+    will-change: transform;
+}
+
+/* soft side fades */
+/* softer, wider side fades for file titles / marquee titles */
+.post-layout-title-visual .post-title,
+.post-layout-title-visual-text .post-title,
+.post-layout-title-text.is-long-text .post-title,
+.post-layout-title .post-title {
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(0,0,0,0.12) 4%,
+        rgba(0,0,0,0.28) 8%,
+        rgba(0,0,0,0.5) 12%,
+        rgba(0,0,0,0.75) 16%,
+        black 22%,
+        black 78%,
+        rgba(0,0,0,0.75) 84%,
+        rgba(0,0,0,0.5) 88%,
+        rgba(0,0,0,0.28) 92%,
+        rgba(0,0,0,0.12) 96%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(0,0,0,0.12) 4%,
+        rgba(0,0,0,0.28) 8%,
+        rgba(0,0,0,0.5) 12%,
+        rgba(0,0,0,0.75) 16%,
+        black 22%,
+        black 78%,
+        rgba(0,0,0,0.75) 84%,
+        rgba(0,0,0,0.5) 88%,
+        rgba(0,0,0,0.28) 92%,
+        rgba(0,0,0,0.12) 96%,
+        transparent 100%
+    );
+}
+
+.post-title.is-marquee .post-title-track {
+    padding-right: 60px;
+    animation: post-title-marquee 9s linear infinite;
+}
+
+@keyframes post-title-marquee {
+    0% {
+        transform: translateX(0);
+    }
+    10% {
+        transform: translateX(0);
+    }
+    90% {
+        transform: translateX(-45%);
+    }
+    100% {
+        transform: translateX(-45%);
+    }
+}
+
+
+/* file preview base */
+.post-file-preview {
+    position: relative;
+    width: 300px;
+    height: 300px;
+    max-width: 100%;
+    flex-shrink: 0;
+    overflow: hidden;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.post-file-preview-label {
+    font-size: 4rem;
+    color: rgba(0, 0, 0, 0.55);
+    text-transform: uppercase;
+    transition: opacity 0.18s ease;
+    pointer-events: none;
+}
+
+.post-file-preview-play,
+.post-file-preview-download-btn,
+.post-preview-mute-btn {
+    position: absolute;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    background: transparent;
+    color: rgba(0, 0, 0, 0.7);
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    line-height: 1;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.post-file-preview-play,
+.post-file-preview-download-btn,
+.post-preview-mute-btn {
+    font-size: 3.4rem;
+}
+
+/* nonvisual file tiles only */
+.post-file-preview-audio,
+.post-file-preview-download {
+    border: 2px solid rgba(0, 0, 0, 0.28);
+}
+
+.post-file-preview-audio:hover .post-file-preview-label,
+.post-file-preview-download:hover .post-file-preview-label {
+    opacity: 0;
+}
+
+.post-file-preview-audio:hover .post-file-preview-play,
+.post-file-preview-download:hover .post-file-preview-download-btn,
+.post-file-preview-video:hover .post-preview-mute-btn {
+    opacity: 1;
+}
+
+/* video preview */
+.post-preview-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* ============================================ */
+/* 11.X TITLE HIERARCHY                         */
+/* ============================================ */
+
+.post-title {
+    font-size: var(--post-title-size);
+    color: rgba(0, 0, 0, 0.8);
+    line-height: 1.2;
+    font-family: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* lightweight/header-style titles only */
+/* big lightweight titles only */
+.post-layout-title .post-title,
+.post-layout-title-text:not(.is-long-text) .post-title {
+    font-size: calc(var(--post-title-size) * 1.45);
+    line-height: 1.08;
+}
+
+/* any title with a file stays smaller */
+.post-layout-title-visual .post-title,
+.post-layout-title-visual-text .post-title {
+    font-size: var(--post-title-size);
+    line-height: 1.2;
+}
+
+/* long titles stay modest */
+.post-title.is-long-title {
+    font-size: var(--post-title-size);
+    line-height: 1.2;
+}
+
+/* any long-text card gets normal title size */
+.post-layout-title-text.is-long-text .post-title,
+.post-layout-title-text.is-long-text .post-title.is-long-title,
+.post-layout-title-visual-text.is-long-text .post-title,
+.post-layout-title-visual-text.is-long-text .post-title.is-long-title {
+    font-size: var(--post-title-size);
+    line-height: 1.2;
 }
 
 /* ============================================ */
 /* 11.6 POST FOOTER                            */
 /* ============================================ */
 
+.post-layout-title-visual,
+.post-layout-visual {
+    width: 300px;
+}
+
+.post-layout-title-visual + .post-footer,
+.post-layout-visual + .post-footer {
+    width: 300px;
+}
+
+.post-layout-title-visual-text:not(.is-long-text) {
+    width: 300px;
+}
+
+.post-layout-title-visual-text:not(.is-long-text) + .post-footer {
+    width: 300px;
+}
+
+.post-layout-title-visual-text.is-long-text {
+    width: 612px;
+}
+
+.post-layout-title-visual-text.is-long-text + .post-footer {
+    width: 612px;
+}
+
+.post-layout-title-text.is-long-text,
+.post-layout-title-text.is-long-text + .post-footer {
+    width: 612px;
+}
+
 .post-footer {
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
     padding-top: 8px;
 }
 
 .post-footer-pfp {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
+    width: 44px;
+    height: 44px;
     object-fit: cover;
     flex-shrink: 0;
 }
@@ -608,6 +914,7 @@ input[type=number]::-webkit-outer-spin-button {
 
 .post-footer-filename {
     font-size: var(--post-footer-size);
+    font-style: italic;
     color: rgba(0, 0, 0, 0.3);
     font-family: inherit;
     white-space: nowrap;
@@ -748,19 +1055,14 @@ input[type=number]::-webkit-outer-spin-button {
 
 /* Clickable footer filters (normal mode) */
 .post-footer-filter-btn {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 4px;
     cursor: pointer;
 }
 
 .post-footer-filter-btn:hover {
-    color: rgba(255, 255, 255, 0.9);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0px;
 }
-
-/* ============================================ */
-/* 16.0 POST DETAIL MODAL                       */
-/* ============================================ */
 
 /* ============================================ */
 /* 16.0 POST DETAIL MODAL                       */
@@ -818,6 +1120,19 @@ input[type=number]::-webkit-outer-spin-button {
     display: flex;
     flex-direction: column;
     gap: 20px;
+}
+
+
+.post-layout-title-visual-text.is-long-text .post-visual-text-row .post-image,
+.post-layout-title-visual-text.is-long-text .post-visual-text-row .post-file-preview,
+.post-layout-title-visual-text.is-long-text .post-visual-text-row .post-body {
+    width: 300px;
+}
+
+.post-layout-title-visual-text.is-long-text .post-visual-text-row .post-image,
+.post-layout-title-visual-text.is-long-text .post-visual-text-row .post-file-preview {
+    height: 300px;
+    flex-shrink: 0;
 }
 
 .post-detail-content .post-title {
@@ -965,6 +1280,8 @@ input[type=number]::-webkit-outer-spin-button {
     background: rgba(255,255,255,0.12);
     border-color: rgba(255,255,255,0.25);
 }
+
+
 
 /* ============================================ */
 /* 17.0 CANVAS VIEWPORT AND POST CANVAS         */

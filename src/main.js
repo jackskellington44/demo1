@@ -367,7 +367,7 @@ function closeCoverImagePrompt() {
 function openPostDetailModal(post, user) {
   activePostForModal = post;
 
-  const titleHtml = post.title ? `<div class="post-title">${post.title}</div>` : '';
+  const titleHtml = post.title ? `<div class="post-title"><span class="post-title-track">${post.title}</span></div>` : '';
   const bodyHtml = post.body ? `<div class="post-body">${post.body}</div>` : '';
 
   let visualHtml = '';
@@ -1026,10 +1026,116 @@ async function loadPosts() {
   }
 }
 
+
+
+function trapScrollInside(el) {
+  if (!el) return;
+
+  el.addEventListener('wheel', (e) => {
+    const canScroll = el.scrollHeight > el.clientHeight;
+    if (!canScroll) return;
+
+    e.stopPropagation();
+
+    const atTop = el.scrollTop <= 0;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    const scrollingUp = e.deltaY < 0;
+    const scrollingDown = e.deltaY > 0;
+
+    if ((scrollingUp && !atTop) || (scrollingDown && !atBottom)) {
+      e.preventDefault();
+      el.scrollTop += e.deltaY;
+    } else {
+      /* still prevent canvas zoom when hovering text */
+      e.preventDefault();
+    }
+  }, { passive: false });
+}
+
+function getFileExtension(filename = '') {
+  const parts = filename.split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : '';
+}
+
+function isImageExtension(ext) {
+  return [
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp',
+    'heif', 'avif', 'svg'
+  ].includes(ext);
+}
+
+function isAudioExtension(ext) {
+  return [
+    'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga'
+  ].includes(ext);
+}
+
+function isVideoExtension(ext) {
+  return [
+    'mp4', 'mov', 'webm', 'm4v', 'ogv'
+  ].includes(ext);
+}
+
+function isVisualExtension(ext) {
+  return isImageExtension(ext) || isVideoExtension(ext);
+}
+
+function getFilePreviewLabel(filename = '') {
+  const ext = getFileExtension(filename);
+  if (!ext) return '?';
+  return ext.toUpperCase();
+}
+
+function buildFilePreviewMarkup(post) {
+  const ext = getFileExtension(post.file_name || '');
+  const label = getFilePreviewLabel(post.file_name || '');
+
+  const isImage = isImageExtension(ext);
+  const isAudio = isAudioExtension(ext);
+  const isVideo = isVideoExtension(ext);
+
+  if (isImage && post.file_url) {
+    return `<img class="post-image" src="${post.file_url}" alt="">`;
+  }
+
+  if (isVideo && post.file_url) {
+    return `
+      <div class="post-file-preview post-file-preview-video">
+        <video class="post-preview-video" src="${post.file_url}" muted loop autoplay playsinline preload="metadata"></video>
+        <button class="post-preview-mute-btn" type="button" aria-label="toggle sound">🔇</button>
+      </div>
+    `;
+  }
+
+  if (isAudio && post.file_url) {
+    return `
+      <div class="post-file-preview post-file-preview-audio">
+        <div class="post-file-preview-label">${label}</div>
+        <button class="post-file-preview-play" type="button" aria-label="play audio">▶</button>
+        <audio class="post-preview-audio" src="${post.file_url}" preload="none"></audio>
+      </div>
+    `;
+  }
+
+  if (post.file_url) {
+    return `
+      <div class="post-file-preview post-file-preview-download">
+        <div class="post-file-preview-label">${label}</div>
+        <a class="post-file-preview-download-btn" href="${post.file_url}" download aria-label="download file">⤓</a>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="post-file-preview">
+      <div class="post-file-preview-label">${label}</div>
+    </div>
+  `;
+}
+
 // ============================================
 // 12. POST CARD BUILDER
 // ============================================
-
 function buildPostCard(post, user) {
   const card = document.createElement('div');
   card.className = 'post-card';
@@ -1047,57 +1153,157 @@ function buildPostCard(post, user) {
   card.style.left = `${x}px`;
   card.style.top = `${y}px`;
 
-  const hasTitle = post.title && post.title.trim();
-  const hasText = post.body && post.body.trim();
+  const hasTitle = !!(post.title && post.title.trim());
+  const hasText = !!(post.body && post.body.trim());
 
-  const hasVisual = !!post.file_url && (
-    post.file_type === 'image' ||
-    post.file_type === 'video' ||
-    !!post.cover_image_url
-  );
+  const fileExt = getFileExtension(post.file_name || '');
+  const isImageFile = isImageExtension(fileExt);
+  const isVideoFile = isVideoExtension(fileExt);
+  const isAudioFile = isAudioExtension(fileExt);
+  const isVisualFile = isVisualExtension(fileExt);
+  const hasCoverImage = !!post.cover_image_url;
+  const hasAnyFile = !!post.file_url;
+  const isOtherFile = hasAnyFile && !isVisualFile && !isAudioFile;
+
+  const hasVisual = hasAnyFile && (isVisualFile || hasCoverImage);
 
   let visualSrc = null;
-  if (post.file_type === 'image') {
+  if (isImageFile || isVideoFile) {
     visualSrc = post.file_url;
-  } else if (post.cover_image_url) {
+  } else if (hasCoverImage) {
     visualSrc = post.cover_image_url;
   }
 
   const content = document.createElement('div');
   content.className = 'post-card-content';
 
-  if (hasTitle && hasVisual && hasText) {
+  if (hasTitle && (hasVisual || isAudioFile || isOtherFile) && hasText) {
     content.classList.add('post-layout-title-visual-text');
+
+    let previewMarkup = '';
+
+    if (isImageFile) {
+      previewMarkup = `<img class="post-image" src="${visualSrc}" alt="">`;
+    } else if (isVideoFile || isAudioFile || isOtherFile) {
+      previewMarkup = buildFilePreviewMarkup(post);
+    } else if (hasCoverImage) {
+      previewMarkup = `<img class="post-image" src="${visualSrc}" alt="">`;
+    }
+
     content.innerHTML = `
-      <div class="post-title">${post.title}</div>
+      <div class="post-title"><span class="post-title-track">${post.title}</span></div>
       <div class="post-visual-text-row">
-        <img class="post-image" src="${visualSrc}" alt="">
+        ${previewMarkup}
         <div class="post-body">${post.body}</div>
       </div>
     `;
   } else if (hasTitle && hasVisual) {
     content.classList.add('post-layout-title-visual');
-    content.innerHTML = `
-      <div class="post-title">${post.title}</div>
-      <img class="post-image" src="${visualSrc}" alt="">
-    `;
+
+    if (isVideoFile) {
+      content.innerHTML = `
+        <div class="post-title"><span class="post-title-track">${post.title}</span></div>
+        ${buildFilePreviewMarkup(post)}
+      `;
+    } else {
+      content.innerHTML = `
+        <div class="post-title"><span class="post-title-track">${post.title}</span></div>
+        <img class="post-image" src="${visualSrc}" alt="">
+      `;
+    }
   } else if (hasTitle && hasText) {
     content.classList.add('post-layout-title-text');
     content.innerHTML = `
-      <div class="post-title">${post.title}</div>
+      <div class="post-title"><span class="post-title-track">${post.title}</span></div>
       <div class="post-body">${post.body}</div>
     `;
   } else if (hasVisual) {
     content.classList.add('post-layout-visual');
-    content.innerHTML = `
-      <img class="post-image" src="${visualSrc}" alt="">
-    `;
+
+    if (isVideoFile) {
+      content.innerHTML = buildFilePreviewMarkup(post);
+    } else {
+      content.innerHTML = `<img class="post-image" src="${visualSrc}" alt="">`;
+    }
   } else if (hasTitle) {
     content.classList.add('post-layout-title');
-    content.innerHTML = `<div class="post-title">${post.title}</div>`;
+    content.innerHTML = `<div class="post-title"><span class="post-title-track">${post.title}</span></div>`;
   } else if (hasText) {
     content.classList.add('post-layout-text');
     content.innerHTML = `<div class="post-body">${post.body}</div>`;
+  }
+
+  if (
+  content.classList.contains('post-layout-title-visual-text') ||
+  content.classList.contains('post-layout-title-text')
+) {
+  const bodyEl = content.querySelector('.post-body');
+  if (bodyEl) {
+    const text = bodyEl.textContent.trim();
+    if (text.length >= 244) {
+      content.classList.add('is-long-text');
+      trapScrollInside(bodyEl);
+    }
+  }
+}
+
+  const titleEl = content.querySelector('.post-title');
+const titleTrackEl = content.querySelector('.post-title-track');
+
+if (titleEl && titleTrackEl) {
+  requestAnimationFrame(() => {
+    if (titleTrackEl.scrollWidth > titleEl.clientWidth) {
+      titleEl.classList.add('is-marquee');
+    }
+  });
+}
+
+  const previewVideo = content.querySelector('.post-preview-video');
+  const muteBtn = content.querySelector('.post-preview-mute-btn');
+
+  if (previewVideo && muteBtn) {
+    muteBtn.textContent = previewVideo.muted ? '🔇' : '🔊';
+
+    muteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      previewVideo.muted = !previewVideo.muted;
+      muteBtn.textContent = previewVideo.muted ? '🔇' : '🔊';
+    });
+  }
+
+  const audioPreview = content.querySelector('.post-preview-audio');
+  const playBtn = content.querySelector('.post-file-preview-play');
+
+  if (audioPreview && playBtn) {
+    playBtn.textContent = audioPreview.paused ? '▶' : '❚❚';
+
+    playBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+
+      try {
+        if (audioPreview.paused) {
+          await audioPreview.play();
+          playBtn.textContent = '❚❚';
+        } else {
+          audioPreview.pause();
+          playBtn.textContent = '▶';
+        }
+      } catch (err) {
+        console.error('Audio preview failed:', err);
+      }
+    });
+
+    audioPreview.addEventListener('ended', () => {
+      playBtn.textContent = '▶';
+    });
+
+    audioPreview.addEventListener('pause', () => {
+      playBtn.textContent = '▶';
+    });
+
+    audioPreview.addEventListener('play', () => {
+      playBtn.textContent = '❚❚';
+    });
   }
 
   card.appendChild(content);
@@ -1166,6 +1372,9 @@ function buildPostCard(post, user) {
   card.addEventListener('click', (e) => {
     if (isPlacing) return;
     if (e.target.closest('.post-footer-action')) return;
+    if (e.target.closest('.post-preview-mute-btn')) return;
+    if (e.target.closest('.post-file-preview-play')) return;
+    if (e.target.closest('.post-file-preview-download-btn')) return;
     openPostDetailModal(post, user);
   });
 
