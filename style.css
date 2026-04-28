@@ -472,12 +472,14 @@ input[type=number]::-webkit-outer-spin-button {
     display: flex;
     flex-direction: column;
     max-width: 600px;
+    overflow: visible; /* allow title to bleed past card edges */
 }
 
 /* === 11.1 POST CARD CONTENT === */
 .post-card-content {
     display: flex;
     flex-direction: column;
+    overflow: visible; /* allow title to bleed */
 }
 
 /* ============================================ */
@@ -592,35 +594,36 @@ input[type=number]::-webkit-outer-spin-button {
 
 .post-layout-title-visual-text.is-long-text .post-visual-text-row .post-body {
     position: relative;
-    height: 300px;
+    height: 340px;         /* slightly taller — extra room is the top fade zone */
     overflow-y: auto;
     overflow-x: hidden;
+    padding-top: 30px;     /* pushes first line below the top fade at scroll=0 */
     padding-right: 12px;
     line-height: 1.5;
+    /* Pull the box up by the same amount so the card height stays the same */
+    margin-top: -30px;
 
     scrollbar-width: none;
     -ms-overflow-style: none;
 
     -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(0,0,0,0.2) 3%,
-    rgba(0,0,0,0.5) 6%,
-    rgba(0,0,0,0.8) 9%,
-    black 14%,
-    black 82%,
-    transparent 100%
-);
-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(0,0,0,0.2) 3%,
-    rgba(0,0,0,0.5) 6%,
-    rgba(0,0,0,0.8) 9%,
-    black 14%,
-    black 82%,
-    transparent 100%
-);
+        to bottom,
+        transparent 0%,
+        rgba(0,0,0,0.3) 8%,
+        black 50%,         /* fade zone is now much wider */
+        black 74%,
+        rgba(0,0,0,0.5) 88%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(0,0,0,0.3) 8%,
+        black 50%,
+        black 74%,
+        rgba(0,0,0,0.5) 88%,
+        transparent 100%
+    );
 }
 
 .post-layout-title-visual-text.is-long-text .post-visual-text-row .post-body::-webkit-scrollbar {
@@ -631,11 +634,13 @@ mask-image: linear-gradient(
 .post-layout-title-text.is-long-text .post-body {
     width: 612px;
     max-width: 100%;
-    height: 300px;
+    height: 340px;
     overflow-y: auto;
     overflow-x: hidden;
     line-height: 1.5;
+    padding-top: 30px;
     padding-right: 12px;
+    margin-top: -30px;
 
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -643,21 +648,17 @@ mask-image: linear-gradient(
     -webkit-mask-image: linear-gradient(
         to bottom,
         transparent 0%,
-        rgba(0,0,0,0.2) 3%,
-        rgba(0,0,0,0.5) 6%,
-        rgba(0,0,0,0.8) 9%,
-        black 14%,
-        black 82%,
+        black 50%,
+        black 50%,
+        rgba(0,0,0,0.5) 88%,
         transparent 100%
     );
     mask-image: linear-gradient(
         to bottom,
         transparent 0%,
-        rgba(0,0,0,0.2) 3%,
-        rgba(0,0,0,0.5) 6%,
-        rgba(0,0,0,0.8) 9%,
-        black 14%,
-        black 82%,
+        black 50%,
+        black 50%,
+        rgba(0,0,0,0.5) 88%,
         transparent 100%
     );
 }
@@ -668,11 +669,16 @@ mask-image: linear-gradient(
 
 .post-title {
     position: relative;
-    width: 612px;
-    max-width: 100%;
+    margin-left: -22px;
+    margin-right: -22px;
+    width: calc(100% + 44px);
+    max-width: calc(100% + 44px);
+    padding-left: 22px;
+    padding-right: 22px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: clip;
+
 }
 
 .post-title-track {
@@ -682,62 +688,35 @@ mask-image: linear-gradient(
     will-change: transform;
 }
 
-/* soft side fades */
-/* softer, wider side fades for file titles / marquee titles */
-.post-layout-title-visual .post-title,
-.post-layout-title-visual-text .post-title,
-.post-layout-title-text.is-long-text .post-title,
-.post-layout-title .post-title {
+/* When marquee is active: soft fade both sides so scrolling text fades in/out */
+/* === MARQUEE ACTIVE: fade at the bleed edges === */
+/* Short/fitting titles get NO fade — only .is-marquee gets one */
+.post-title.is-marquee {
     -webkit-mask-image: linear-gradient(
         to right,
         transparent 0%,
-        rgba(0,0,0,0.12) 4%,
-        rgba(0,0,0,0.28) 8%,
-        rgba(0,0,0,0.5) 12%,
-        rgba(0,0,0,0.75) 16%,
-        black 22%,
-        black 78%,
-        rgba(0,0,0,0.75) 84%,
-        rgba(0,0,0,0.5) 88%,
-        rgba(0,0,0,0.28) 92%,
-        rgba(0,0,0,0.12) 96%,
+        black 20%,
+        black 82%,
         transparent 100%
     );
     mask-image: linear-gradient(
         to right,
         transparent 0%,
-        rgba(0,0,0,0.12) 4%,
-        rgba(0,0,0,0.28) 8%,
-        rgba(0,0,0,0.5) 12%,
-        rgba(0,0,0,0.75) 16%,
-        black 22%,
-        black 78%,
-        rgba(0,0,0,0.75) 84%,
-        rgba(0,0,0,0.5) 88%,
-        rgba(0,0,0,0.28) 92%,
-        rgba(0,0,0,0.12) 96%,
+        black 20%,
+        black 82%,
         transparent 100%
     );
 }
 
+/* The track drives the seamless loop animation */
 .post-title.is-marquee .post-title-track {
-    padding-right: 60px;
-    animation: post-title-marquee 9s linear infinite;
+    animation: post-title-marquee 14s linear infinite;
 }
 
+/* Keyframe uses a CSS variable set by JS for a pixel-perfect seam */
 @keyframes post-title-marquee {
-    0% {
-        transform: translateX(0);
-    }
-    10% {
-        transform: translateX(0);
-    }
-    90% {
-        transform: translateX(-45%);
-    }
-    100% {
-        transform: translateX(-45%);
-    }
+    from { transform: translateX(0); }
+    to   { transform: translateX(var(--marquee-end-pct, -50%)); }
 }
 
 
@@ -912,22 +891,47 @@ mask-image: linear-gradient(
     font-family: inherit;
 }
 
-.post-footer-filename {
-    font-size: var(--post-footer-size);
-    font-style: italic;
-    color: rgba(0, 0, 0, 0.3);
-    font-family: inherit;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 150px;
-}
-
 .post-footer-category {
     font-size: var(--post-footer-size);
     color: rgba(0, 0, 0, 0.3);
     font-family: inherit;
     margin-left: auto;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 180px;
+    flex-shrink: 0;
+}
+
+.post-footer-category-track {
+    display: inline-block;
+    white-space: nowrap;
+    will-change: transform;
+}
+
+.post-footer-category.is-marquee {
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 14%,
+        black 86%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 14%,
+        black 86%,
+        transparent 100%
+    );
+}
+
+.post-footer-category.is-marquee .post-footer-category-track {
+    animation: post-category-marquee 10s linear infinite;
+}
+
+@keyframes post-category-marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(var(--marquee-end-pct, -50%)); }
 }
 
 /* ============================================ */
@@ -1062,6 +1066,24 @@ mask-image: linear-gradient(
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 0px;
+}
+
+.post-footer-filter-btn:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0px;
+}
+
+/* for category specifically, underline the inner track span */
+.post-footer-category.post-footer-filter-btn:hover .post-footer-category-track {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0px;
+}
+
+/* and remove it from the outer element to avoid double */
+.post-footer-category.post-footer-filter-btn:hover {
+    text-decoration: none;
 }
 
 /* ============================================ */
@@ -1355,4 +1377,9 @@ mask-image: linear-gradient(
 #linkLayer .link-hit {
   pointer-events: stroke;
   cursor: pointer;
+}
+
+@keyframes link-flow {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: -40; }
 }

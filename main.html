@@ -19,66 +19,34 @@
     <button id="logoutBtn" class="view-toggle logout-btn">log out</button>
   </div>
 
-  <!-- Post form overlay (hidden by default, opens on right-click) -->
-  <div class="post-form-overlay" id="postFormOverlay" style="display: none;">
-    <div class="post-form" id="postForm">
-      <input type="text" class="post-form-title" id="postTitle" placeholder="title" maxlength="75" autocomplete="off">
-
-      <div class="post-form-category-row">
-        <select class="post-form-category" id="postCategory">
-          <option value="">none</option>
-        </select>
-        <input type="text" class="post-form-category-input" id="postCategoryInput" placeholder="type category, press enter" autocomplete="off" style="display: none;">
-        <div class="post-form-add-category" id="addCategoryToggle">+</div>
-      </div>
-
-      <label class="post-form-file-label" id="postFileLabel">
-        <span id="postFileName">choose file</span>
-        <input type="file" id="postFileInput">
-      </label>
-
-      <textarea class="post-form-text" id="postText" placeholder="text"></textarea>
-
-      <div class="post-form-buttons">
-        <button id="postSubmitBtn">submit</button>
-        <button id="postCancelBtn">cancel</button>
-      </div>
-    </div>
-  </div>
-
-<!-- Post form overlay (hidden by default, opens on right-click) -->
-                <!-- Post form overlay (hidden by default, opens on right-click) -->
+        <!-- Post form overlay (hidden by default, opens on right-click) -->
         <div class="post-form-overlay" id="postFormOverlay" style="display: none;">
-            <div class="post-form" id="postForm">
+        <div class="post-form" id="postForm">
 
-                <!-- Title input -->
-                <input type="text" class="post-form-title" id="postTitle" placeholder="title" maxlength="75" autocomplete="off">
+            <input type="text" class="post-form-title" id="postTitle" placeholder="title" maxlength="75" autocomplete="off">
 
-                <!-- Category dropdown + add new -->
-                <div class="post-form-category-row">
-                    <select class="post-form-category" id="postCategory">
-                        <option value="">none</option>
-                    </select>
-                    <input type="text" class="post-form-category-input" id="postCategoryInput" placeholder="type category, press enter" autocomplete="off" style="display: none;">
-                    <div class="post-form-add-category" id="addCategoryToggle">+</div>
-                </div>
-
-                <!-- File upload -->
-                <label class="post-form-file-label" id="postFileLabel">
-                    <span id="postFileName">choose file</span>
-                    <input type="file" id="postFileInput">
-                </label>
-
-                <!-- Text input -->
-                <textarea class="post-form-text" id="postText" placeholder="text"></textarea>
-
-                <!-- Buttons -->
-                <div class="post-form-buttons">
-                    <button id="postSubmitBtn">submit</button>
-                    <button id="postCancelBtn">cancel</button>
-                </div>
-
+            <div class="post-form-category-row">
+            <select class="post-form-category" id="postCategory">
+                <option value="">none</option>
+            </select>
+            <input type="text" class="post-form-category-input" id="postCategoryInput" placeholder="type category, press enter" autocomplete="off" style="display: none;">
+            <div class="post-form-add-category" id="addCategoryToggle">+</div>
             </div>
+
+            <label class="post-form-file-label" id="postFileLabel">
+            <span id="postFileName">choose file</span>
+            <input type="file" id="postFileInput">
+            </label>
+
+            <textarea class="post-form-text" id="postText" placeholder="text"></textarea>
+
+            <div class="post-form-buttons">
+            <button id="postDeleteBtn" style="display:none; margin-right:auto; color:rgba(255,100,100,0.6);">delete</button>
+            <button id="postSubmitBtn">submit</button>
+            <button id="postCancelBtn">cancel</button>
+            </div>
+
+        </div>
         </div>
 
         <!-- Cover image prompt overlay -->
