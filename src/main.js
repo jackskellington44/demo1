@@ -1637,6 +1637,17 @@ function initializeEventListeners() {
       return;
     }
 
+    // Middle mouse button pan
+    canvasViewport.addEventListener('mousedown', (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      isPanning = true;
+      panStartX = e.clientX;
+      panStartY = e.clientY;
+      panStartOffsetX = canvasOffsetX;
+      panStartOffsetY = canvasOffsetY;
+    });
+
     isPanning = true;
     panStartX = e.clientX;
     panStartY = e.clientY;
@@ -1657,6 +1668,10 @@ function initializeEventListeners() {
     isPanning = false;
   });
 
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 1) isPanning = false;
+  }); 
+
   window.addEventListener('mousemove', (e) => {
     if (isPlacing) updatePlacementPosition(e);
   });
@@ -1665,6 +1680,10 @@ function initializeEventListeners() {
     if (!isPlacing) return;
     if (e.button !== 0) return;
     await tryDropPlacement(e);
+  });
+
+  canvasViewport.addEventListener('auxclick', (e) => {
+    if (e.button === 1) e.preventDefault();
   });
 
   // Right-click: single = open/close form, double = toggle edit mode
