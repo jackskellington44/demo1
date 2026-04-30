@@ -122,7 +122,7 @@ function getConnectedComponent(startId, links) {
 // ============================================
 
 let canvasScale = 1;
-const MIN_SCALE = 0.4;
+const MIN_SCALE = 0.04;
 const MAX_SCALE = 2.2;
 const ZOOM_SENSITIVITY = 0.0015; // tweak: smaller = slower zoom
 
@@ -440,6 +440,39 @@ function closeCoverImagePrompt() {
   pendingPost = null;
 }
 
+function initFileNav(files) {
+  let idx = 0;
+
+  const viewer = document.getElementById('fileNavViewer');
+  const label  = document.getElementById('fileNavLabel');
+  const prev   = document.getElementById('fileNavPrev');
+  const next   = document.getElementById('fileNavNext');
+  if (!viewer || !label || !prev || !next) return;
+
+  function render() {
+    const f = files[idx];
+    label.textContent = `${f.name}  (${idx + 1} / ${files.length})`;
+
+    if (f.type === 'image') {
+      viewer.innerHTML = `<img class="post-image" src="${f.url}" alt="">`;
+    } else if (f.type === 'video') {
+      viewer.innerHTML = `<video class="post-video" src="${f.url}" controls></video>`;
+    } else if (f.type === 'audio') {
+      viewer.innerHTML = `<audio src="${f.url}" controls style="width:100%"></audio>`;
+    } else {
+      viewer.innerHTML = `
+        <div class="file-nav-download">
+          <a href="${f.url}" download>${f.name}</a>
+        </div>
+      `;
+    }
+  }
+
+  prev.addEventListener('click', () => { idx = (idx - 1 + files.length) % files.length; render(); });
+  next.addEventListener('click', () => { idx = (idx + 1) % files.length; render(); });
+  render();
+}
+
 // (modal functions unchanged)
 function openPostDetailModal(post, user) {
   activePostForModal = post;
@@ -448,7 +481,21 @@ function openPostDetailModal(post, user) {
   const bodyHtml = post.body ? `<div class="post-body">${post.body}</div>` : '';
 
   let visualHtml = '';
-  if (post.file_type === 'image' && post.file_url) {
+
+  if (post.files && post.files.length > 1) {
+    // Multi-file navigator
+    const filesJson = JSON.stringify(post.files).replace(/'/g, '&#39;');
+    visualHtml = `
+      <div class="post-detail-file-nav" id="fileNav">
+        <button class="file-nav-btn" id="fileNavPrev">‹</button>
+        <div class="file-nav-viewer" id="fileNavViewer"></div>
+        <button class="file-nav-btn" id="fileNavNext">›</button>
+      </div>
+      <div class="file-nav-label" id="fileNavLabel"></div>
+    `;
+    // Inject files data after modal is shown — handled below
+    setTimeout(() => initFileNav(post.files), 0);
+  } else if (post.file_type === 'image' && post.file_url) {
     visualHtml = `<img class="post-image" src="${post.file_url}" alt="">`;
   } else if (post.file_type === 'video' && post.file_url) {
     visualHtml = `<video class="post-video" src="${post.file_url}" controls></video>`;
@@ -515,7 +562,7 @@ function openEditForm(post) {
   postTitle.value = post.title || '';
   postText.value = post.body || '';
   postCategory.value = post.category || '';
-  postFileName.textContent = post.file_name ? post.file_name : 'choose file';
+  postFileName.textContent = post.file_name ? post.file_name : 'replace file';
 
   postDeleteBtn.style.display = 'inline-block'; // show in edit mode
 
@@ -523,7 +570,7 @@ function openEditForm(post) {
 if (hasNonVisualFile || post.cover_image_url) {
   postCoverImageLabel.style.display = 'block';
   postCoverFileName.textContent = post.cover_image_url
-    ? 'current cover (choose to replace)'
+    ? 'replace cover'
     : 'choose cover image';
 }
   openPostForm();
@@ -784,18 +831,21 @@ async function handlePostSubmit() {
   const title     = postTitle.value.trim();
   const body      = postText.value.trim();
   const category  = postCategory.value || null;
-  const file      = postFileInput.files[0] || null;
+  const fileList  = [...postFileInput.files];
+  const isMulti   = fileList.length > 1;
   const coverFile = postCoverImageInput.files[0] || null;
 
-  if (!title && !file && !body) {
+  if (!title && fileList.length === 0 && !body) {
     alert('Add a title, text, or choose a file');
     return;
   }
 
   try {
     let fileURL = null, fileName = null, fileType = null;
+    let filesArray = null;
 
-    if (file) {
+    if (fileList.length === 1) {
+      const file = fileList[0];
       fileName = file.name;
       fileType = await getFileType(file);
       const filePath = `${currentUser.id}/${Date.now()}-${file.name}`;
@@ -805,6 +855,27 @@ async function handlePostSubmit() {
       const { data: urlData } = supabase.storage
         .from('group1-posts').getPublicUrl(filePath);
       fileURL = urlData.publicUrl;
+
+    } else if (isMulti) {
+      filesArray = [];
+      for (const file of fileList) {
+        const ft = await getFileType(file);
+        const filePath = `${currentUser.id}/${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('group1-posts').upload(filePath, file);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage
+          .from('group1-posts').getPublicUrl(filePath);
+        filesArray.push({ url: urlData.publicUrl, name: file.name, type: ft });
+      }
+    }
+
+
+    // Auto-cover: if multi-file and no manual cover chosen, use first visual file's URL
+    let autoCoverUrl = null;
+    if (isMulti && !coverFile && filesArray) {
+      const firstVisual = filesArray.find(f => f.type === 'image' || f.type === 'video');
+      if (firstVisual) autoCoverUrl = firstVisual.url;
     }
 
     let coverImageURL = null;
@@ -824,14 +895,23 @@ async function handlePostSubmit() {
       category: category || null,
     };
 
-    if (file) {
+    if (fileList.length === 1) {
       postRecord.file_url  = fileURL;
       postRecord.file_name = fileName;
       postRecord.file_type = fileType;
+    } else if (isMulti) {
+      postRecord.files     = filesArray;
+      postRecord.file_url  = null;
+      postRecord.file_name = null;
+      postRecord.file_type = null;
+    } else {
+      postRecord.file_url  = null;
+      postRecord.file_name = null;
+      postRecord.file_type = null;
     }
 
-    if (coverImageURL) {
-      postRecord.cover_image_url = coverImageURL;
+        if (coverImageURL || autoCoverUrl) {
+      postRecord.cover_image_url = coverImageURL || autoCoverUrl;
     }
 
     // ── EDIT ──
@@ -847,12 +927,6 @@ async function handlePostSubmit() {
     // ── CREATE ──
     postRecord.user_id  = currentUser.id;
     postRecord.group_id = 'group1';
-
-    if (!file) {
-      postRecord.file_url  = null;
-      postRecord.file_name = null;
-      postRecord.file_type = null;
-    }
 
     const created = await savePost(postRecord);
 
@@ -883,6 +957,7 @@ async function handlePostSubmit() {
     alert(`Post failed: ${error?.message || error}`);
   }
 }
+
 // ============================================
 // 8. COVER IMAGE PROMPT
 // ============================================
@@ -1220,6 +1295,18 @@ function getFilePreviewLabel(filename = '') {
 }
 
 function buildFilePreviewMarkup(post) {
+  // ── MULTI-FILE ──
+  if (post.files && post.files.length > 1) {
+    const hasCover = !!post.cover_image_url;
+    return `
+      <div class="post-file-preview post-file-preview-download${hasCover ? ' has-cover' : ''}">
+        ${hasCover ? `<img class="post-file-preview-cover" src="${post.cover_image_url}" alt="">` : ''}
+        <div class="post-file-preview-label">+</div>
+        <span class="post-file-preview-download-btn">›</span>
+      </div>
+    `;
+  }
+
   const ext = getFileExtension(post.file_name || '');
   const label = getFilePreviewLabel(post.file_name || '');
 
@@ -1296,14 +1383,16 @@ function buildPostCard(post, user) {
   const hasTitle = !!(post.title && post.title.trim());
   const hasText = !!(post.body && post.body.trim());
 
+  const isMultiFile  = !!(post.files && post.files.length > 1);
   const fileExt = getFileExtension(post.file_name || '');
   const isImageFile  = isImageExtension(fileExt)  || post.file_type === 'image';
   const isAudioFile  = isAudioExtension(fileExt)  || post.file_type === 'audio';
   const isVideoFile  = (isVideoExtension(fileExt) || post.file_type === 'video') && !isAudioFile;
   const isVisualFile = isImageFile || isVideoFile;
   const hasCoverImage = !!post.cover_image_url;
-  const hasAnyFile = !!post.file_url;
-  const isOtherFile = hasAnyFile && !isVisualFile && !isAudioFile;
+  // CHANGE these two lines:
+  const hasAnyFile = !!post.file_url || isMultiFile;
+  const isOtherFile = (!!post.file_url && !isVisualFile && !isAudioFile) || isMultiFile;
 
   const hasVisual = hasAnyFile && (isVisualFile || hasCoverImage);
 
@@ -1742,10 +1831,24 @@ function initializeEventListeners() {
   });
 
   postFileInput.addEventListener('change', async () => {
-  const file = postFileInput.files[0];
-  postFileName.textContent = file ? file.name : 'choose file';
+  const files = [...postFileInput.files];
+  if (files.length === 0) {
+    postFileName.textContent = 'choose file';
+    postCoverImageLabel.style.display = 'none';
+    postCoverImageInput.value = '';
+    postCoverFileName.textContent = 'choose cover image';
+    return;
+  }
 
-  if (file && !await isVisualFile(file)) {
+  postFileName.textContent = files.length === 1
+    ? files[0].name
+    : `${files.length} files`;
+
+  // Show cover input if any file is non-visual
+  const types = await Promise.all(files.map(f => getFileType(f)));
+  const anyNonVisual = types.some(t => t !== 'image' && t !== 'video');
+
+  if (anyNonVisual) {
     postCoverImageLabel.style.display = 'block';
   } else {
     postCoverImageLabel.style.display = 'none';

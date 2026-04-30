@@ -1522,3 +1522,55 @@ input[type=number]::-webkit-outer-spin-button {
   from { stroke-dashoffset: 0; }
   to   { stroke-dashoffset: -40; }
 }
+
+/* ============================================ */
+/* MULTI-FILE NAVIGATOR (detail modal)          */
+/* ============================================ */
+
+.post-detail-file-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-nav-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 2.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.file-nav-btn:hover {
+  color: rgba(255,255,255,0.9);
+}
+
+.file-nav-viewer {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-nav-label {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.35);
+  text-align: center;
+  margin-top: -8px;
+}
+
+.file-nav-download {
+  padding: 20px;
+  text-align: center;
+}
+
+.file-nav-download a {
+  color: rgba(255,255,255,0.6);
+  font-size: 1rem;
+  text-decoration: underline;
+}
