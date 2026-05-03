@@ -39,14 +39,24 @@ function pfpSrcFor(userRow) {
 export async function loadTracks() {
   const { data, error } = await supabase
     .from('music_tracks')
-    .select('*, users(id, username, pfp, pfp_url)')
+    .select('*')                     // ← no join
     .eq('group_id', 'group1')
     .order('created_at', { ascending: true });
 
   if (error) { console.error('Failed to load tracks:', error); return; }
-  tracks = data || [];
 
-  // Auto-select first track on initial load (don't autoplay)
+  const userIds = [...new Set((data || []).map(t => t.user_id).filter(Boolean))];
+  let userMap = {};
+  if (userIds.length > 0) {
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, username, pfp, pfp_url')
+      .in('id', userIds);
+    (users || []).forEach(u => { userMap[u.id] = u; });
+  }
+
+  tracks = (data || []).map(t => ({ ...t, users: userMap[t.user_id] || null }));
+
   if (currentIndex === -1 && tracks.length > 0) {
     currentIndex = 0;
   }
