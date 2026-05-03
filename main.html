@@ -120,6 +120,48 @@
         <input type="file" id="profileCoverInput" accept="image/*" style="display:none;">
         <input type="file" id="profilePfpInput" accept="image/webp,image/gif,image/*" style="display:none;">
 
+    
+     <!-- ============================================ -->
+<!-- MUSIC BAR                                    -->
+<!-- ============================================ -->
+<!-- MUSIC BAR -->
+<div id="musicBar" class="music-bar">
+  <img id="musicBarPfp" class="music-bar-pfp" src="./images/pfps/default.png" alt="">
+  <span id="musicBarUsername" class="music-bar-username">—</span>
+  <button id="musicPrev" class="music-ctrl-btn">‹</button>
+  <button id="musicPlayPause" class="music-ctrl-btn">▷</button>
+  <button id="musicNext" class="music-ctrl-btn">›</button>
+  <button id="musicShuffle" class="music-ctrl-btn" title="shuffle">⇄</button>
+  <button id="musicLoop" class="music-ctrl-btn" title="loop">↺</button>
+  <span id="musicBarTitle" class="music-bar-title">no track</span>
+  <span id="musicBarSep" class="music-bar-sep" style="display:none;">·</span>
+  <span id="musicBarArtist" class="music-bar-artist"></span>
+  <button id="musicPositionToggle" class="music-ctrl-btn music-position-btn">△</button>
+  <button id="musicOpenPanel" class="music-ctrl-btn">≡</button>
+</div>
+
+<!-- ============================================ -->
+<!-- MUSIC PANEL OVERLAY                          -->
+<!-- ============================================ -->
+<div id="musicPanelOverlay" class="music-panel-overlay">
+  <div class="music-panel">
+    <div class="music-panel-header">
+      <span id="musicPanelTitle" class="music-panel-title"></span>
+      <button id="musicClosePanel" class="music-ctrl-btn">×</button>
+    </div>
+
+    <div id="musicDropZone" class="music-drop-zone">
+      <span>drag mp3 · mp4 · flac · wav here — or click to browse</span>
+    </div>
+
+    <div id="musicTrackList" class="music-track-list"></div>
+
+    <div class="music-panel-footer">
+      <button id="musicDownloadPlaylist" class="music-ctrl-btn">⤓ playlist</button>
+    </div>
+  </div>
+</div>
+
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>

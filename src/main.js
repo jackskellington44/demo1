@@ -4,6 +4,8 @@
 
 import { supabase } from './supabase-config.js';
 
+import { initMusic } from './music.js';
+
 // ============================================
 // DOM ELEMENT REFERENCES
 // ============================================
@@ -629,17 +631,11 @@ function closePostDetailModal() {
 
 function toggleEditMode() {
   editMode = !editMode;
-  console.log('Edit mode:', editMode ? 'ON' : 'OFF');
-
   activeUserFilter = null;
   activeCategoryFilter = null;
-
-  if (editMode) {
-    mainPageContainer.classList.add('edit-mode');
-  } else {
-    mainPageContainer.classList.remove('edit-mode');
-  }
-
+  mainPageContainer.classList.toggle('edit-mode', editMode);
+  document.getElementById('editModeBtn')?.classList.toggle('active', editMode);
+  if (!editMode) closePostForm();
   loadPosts();
 }
 
@@ -1079,18 +1075,29 @@ async function openProfileModal(userId) {
   // ── Edit mode (own profile only, triggered by right-click) ──
   const profileModal = document.getElementById('profileModal');
 
+    let lastProfileRightClick = 0;
+
   profileModal.oncontextmenu = (e) => {
     if (!isOwnProfile) return;
     e.preventDefault();
-    profileEditMode = !profileEditMode;
+    e.stopPropagation();
 
-    coverOverlay.style.display     = profileEditMode ? 'flex'   : 'none';
-    pfpOverlay.style.display       = profileEditMode ? 'flex'   : 'none';
-    usernameSpan.style.display     = profileEditMode ? 'none'   : 'inline';
-    usernameInput.style.display    = profileEditMode ? 'inline' : 'none';
-    document.getElementById('profileSaveBtn').style.display = profileEditMode ? 'inline-block' : 'none';
+    const now = Date.now();
+    const timeSince = now - lastProfileRightClick;
+    lastProfileRightClick = now;
+
+    if (timeSince < DOUBLE_CLICK_THRESHOLD) {
+      lastProfileRightClick = 0;
+      profileEditMode = !profileEditMode;
+
+      coverOverlay.style.display  = profileEditMode ? 'flex'         : 'none';
+      pfpOverlay.style.display    = profileEditMode ? 'flex'         : 'none';
+      usernameSpan.style.display  = profileEditMode ? 'none'         : 'inline';
+      usernameInput.style.display = profileEditMode ? 'inline'       : 'none';
+      document.getElementById('profileSaveBtn').style.display = profileEditMode ? 'inline-block' : 'none';
+    }
+    // single right-click inside profile does nothing
   };
-
   profileOverlay.style.display = 'flex';
 }
 
@@ -1932,7 +1939,7 @@ if (titleEl && titleTrackEl) {
   const pfpSrc = user?.pfp_url || (user?.pfp ? `./images/pfps/${user.pfp}` : pfpFallback);
 
 
-    if (editMode) {
+      if (editMode) {
     footer.innerHTML = `
       <img class="post-footer-pfp" src="${pfpSrc}" alt="" data-user-id="${post.user_id}" style="cursor:pointer;">
       <span class="post-footer-action post-footer-edit">edit</span>
@@ -1955,24 +1962,19 @@ if (titleEl && titleTrackEl) {
       startPlacement(post, card, window.__lastMouseEventForPlacement || { clientX: 200, clientY: 200 });
     });
 
-    // Add this after BOTH footer.innerHTML assignments (editMode branch and normal branch):
-    footer.querySelector('.post-footer-pfp');
+    const pfpEl = footer.querySelector('.post-footer-pfp'); // ← const was missing, causing ReferenceError
     if (pfpEl) {
       let pfpPressTimer = null;
       pfpEl.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         e.stopPropagation();
-        pfpPressTimer = setTimeout(() => {
-          pfpPressTimer = null;
-          openProfileModal(post.user_id);
-        }, 400);
+        pfpPressTimer = setTimeout(() => { pfpPressTimer = null; openProfileModal(post.user_id); }, 400);
       });
       pfpEl.addEventListener('mouseup',    () => { clearTimeout(pfpPressTimer); pfpPressTimer = null; });
       pfpEl.addEventListener('mouseleave', () => { clearTimeout(pfpPressTimer); pfpPressTimer = null; });
-    };
+    }
+  }
 
-  } 
-  
   else {
     footer.innerHTML = `
     <img class="post-footer-pfp" src="${pfpSrc}" alt="" data-user-id="${post.user_id}" style="cursor:pointer;">
@@ -2070,13 +2072,13 @@ card.addEventListener('mouseup', () => {
   longPressTimer = null;
 });
 
-card.addEventListener('mouseleave', () => {
-  clearTimeout(longPressTimer);
-  longPressTimer = null;
-});
+  card.addEventListener('mouseleave', () => {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  });
 
   return card;
-}
+} // ← THIS is missing — closes buildPostCard
 
 // ============================================
 // 13. INITIALIZE EVENT LISTENERS
@@ -2160,18 +2162,31 @@ function initializeEventListeners() {
     const timeSince = now - lastRightClick;
     lastRightClick = now;
 
+    const isFormOpen = postFormOverlay.style.display === 'flex';
+
     if (timeSince < DOUBLE_CLICK_THRESHOLD) {
-      // Double right-click = open post form
       lastRightClick = 0;
-      if (postFormOverlay.style.display === 'flex') {
+      closePostForm();
+      toggleEditMode();
+      return;
+    }
+
+    // if right-clicked on a post, next created post links to it
+    const clickedCard = e.target.closest('.post-card');
+    pendingLinkPostId = clickedCard ? clickedCard.dataset.postId : null;
+
+    setTimeout(() => {
+      if (lastRightClick !== now) return;
+
+      if (isFormOpen) {
         closePostForm();
-      } else if (!editMode) {
-        const clickedCard = e.target.closest('.post-card');
-        pendingLinkPostId = clickedCard ? clickedCard.dataset.postId : null;
+        return;
+      }
+
+      if (!editMode) {
         openPostForm();
       }
-    }
-    // Single right-click does nothing now
+    }, DOUBLE_CLICK_THRESHOLD);
   });
 
     // Profile modal
@@ -2321,16 +2336,16 @@ function initializeEventListeners() {
     }
   });
 
-    document.addEventListener('keydown', (e) => {
+     document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (profileOverlay?.style.display === 'flex') {
+    if (profileOverlay?.classList.contains('open')) {
       closeProfileModal();
     } else if (postDetailOverlay?.style.display === 'flex') {
       closePostDetailModal();
-    } else if (editMode) {
-      toggleEditMode();
     } else if (postFormOverlay?.style.display === 'flex') {
       closePostForm();
+    } else if (editMode) {
+      toggleEditMode();
     }
   });
 
@@ -2344,14 +2359,16 @@ function initializeEventListeners() {
       loadNotifications();
     }
   });
+
+    // Close panel when clicking canvas
+  document.getElementById('canvasViewport').addEventListener('mousedown', () => {
+    notifPanel.classList.remove('open');
+  });
+
 }
 
 
 
-  // Close panel when clicking canvas
-  document.getElementById('canvasViewport').addEventListener('mousedown', () => {
-    notifPanel.classList.remove('open');
-  });
 
 // ============================================
 // 14. INITIALIZATION
@@ -2366,14 +2383,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   );
 
   const session = await checkAuth();
-  if (!session) return;
+if (!session) return;
 
-  initializeEventListeners();
-  await loadCategories();
-  await loadPosts();
-  await loadLinks();
-  await loadNotifications();
-  renderLinks(lastLoadedPosts, lastLoadedLinks);
+initializeEventListeners();
+await loadCategories();
+await loadPosts();
+await loadLinks();
+await loadNotifications();
+await initMusic(currentUser, currentUserData);  // ← after auth confirmed
+renderLinks(lastLoadedPosts, lastLoadedLinks);
 
   console.log('Main page ready');
 });
