@@ -73,7 +73,8 @@ let pendingLinkPostId = null;
 // Post create/edit state
 let pendingPost = null;
 let editMode = false;
-let editingPostId = null;
+let editingPostId   = null;
+let editingPost     = null; // full original post row, used to preserve untouched file fields
 
 // Filters (normal mode only)
 let activeUserFilter = null;      // user_id
@@ -246,6 +247,10 @@ function startPlacement(post, cardEl, mouseEvent) {
   placingCardEl = cardEl;
 
   placingCardEl.style.zIndex = '20';
+  // Disable interactive buttons so the drop click can't accidentally trigger them
+  placingCardEl.querySelectorAll(
+    '.post-file-preview-play, .post-file-preview-download-btn, .post-preview-mute-btn'
+  ).forEach(btn => { btn.style.pointerEvents = 'none'; });
 
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -260,6 +265,10 @@ function stopPlacement() {
   if (placingCardEl) {
     placingCardEl.style.zIndex = '';
     placingCardEl.style.outline = '';
+    // Re-enable interactive buttons now that placement is done
+    placingCardEl.querySelectorAll(
+      '.post-file-preview-play, .post-file-preview-download-btn, .post-preview-mute-btn'
+    ).forEach(btn => { btn.style.pointerEvents = ''; });
   }
   isPlacing = false;
   placingPost = null;
@@ -451,6 +460,7 @@ function closePostForm() {
   postCategoryInput.value = '';
   addCategoryToggle.textContent = '+';
   editingPostId = null;
+  editingPost   = null;
   postDeleteBtn.style.display = 'none'; // hide when form closes
 
 
@@ -906,10 +916,17 @@ function toggleEditMode() {
 
 function openEditForm(post) {
   editingPostId = post.id;
+  editingPost   = post; // preserve full row so we can keep untouched file fields
   postTitle.value = post.title || '';
   postText.value = post.body || '';
   postCategory.value = post.category || '';
-  postFileName.textContent = post.file_name ? post.file_name : 'replace file';
+
+  // Show what file(s) are currently attached
+  if (post.files && post.files.length > 1) {
+    postFileName.textContent = `${post.files.length} files attached`;
+  } else {
+    postFileName.textContent = post.file_name || 'replace file';
+  }
 
   postDeleteBtn.style.display = 'inline-block'; // show in edit mode
 
@@ -1442,7 +1459,10 @@ async function saveProfileChanges() {
 // 7. POST SUBMISSION
 // ============================================
 
+
 async function handlePostSubmit() {
+  if (postSubmitBtn.disabled) return; // prevent double-submit
+
   const title     = postTitle.value.trim();
   const body      = postText.value.trim();
   const category  = postCategory.value || null;
@@ -1455,7 +1475,20 @@ async function handlePostSubmit() {
     return;
   }
 
+  // Client-side file size check (Supabase free tier = 50 MB per file)
+  const MAX_FILE_SIZE = 50 * 1024 * 1024;
+  for (const file of fileList) {
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`"${file.name}" is too large — max 50 MB per file.`);
+      return;
+    }
+  }
+
+  postSubmitBtn.disabled    = true;
+  postSubmitBtn.textContent = '...';
+
   try {
+
     let fileURL = null, fileName = null, fileType = null;
     let filesArray = null;
 
@@ -1504,29 +1537,45 @@ async function handlePostSubmit() {
       coverImageURL = coverUrlData.publicUrl;
     }
 
-    const postRecord = {
+        const postRecord = {
       title:    title    || null,
       body:     body     || null,
       category: category || null,
     };
 
     if (fileList.length === 1) {
+      // User chose a new single file — replace everything
       postRecord.file_url  = fileURL;
       postRecord.file_name = fileName;
       postRecord.file_type = fileType;
+      postRecord.files     = null;
     } else if (isMulti) {
+      // User chose multiple new files — replace everything
       postRecord.files     = filesArray;
       postRecord.file_url  = null;
       postRecord.file_name = null;
       postRecord.file_type = null;
+    } else if (editingPostId && editingPost) {
+      // Edit with no new file chosen — preserve whatever was already there
+      postRecord.file_url  = editingPost.file_url  ?? null;
+      postRecord.file_name = editingPost.file_name ?? null;
+      postRecord.file_type = editingPost.file_type ?? null;
+      postRecord.files     = editingPost.files     ?? null;
     } else {
+      // New post with no file
       postRecord.file_url  = null;
       postRecord.file_name = null;
       postRecord.file_type = null;
+      postRecord.files     = null;
     }
 
-        if (coverImageURL || autoCoverUrl) {
-      postRecord.cover_image_url = coverImageURL || autoCoverUrl;
+    // Cover image: use new upload, or auto-cover, or preserve existing on edit
+    if (coverImageURL) {
+      postRecord.cover_image_url = coverImageURL;
+    } else if (autoCoverUrl) {
+      postRecord.cover_image_url = autoCoverUrl;
+    } else if (editingPostId && editingPost) {
+      postRecord.cover_image_url = editingPost.cover_image_url ?? null;
     }
 
     // ── EDIT ──
@@ -1567,9 +1616,12 @@ async function handlePostSubmit() {
       startPlacement(created, createdEl,
         window.__lastMouseEventForPlacement || { clientX: 200, clientY: 200 });
     }
-  } catch (error) {
+   } catch (error) {
     console.error('Post submission failed:', error?.message || error);
     alert(`Post failed: ${error?.message || error}`);
+  } finally {
+    postSubmitBtn.disabled    = false;
+    postSubmitBtn.textContent = 'submit';
   }
 }
 
@@ -2059,13 +2111,24 @@ function buildPostCard(post, user) {
     ${previewMarkup}
   `;
 
-} else if ((isAudioFile || isOtherFile) && hasText) {
-  // ← NEW: audio/other + text, no title
+ } else if ((isAudioFile || isOtherFile) && hasText) {
   content.classList.add('post-layout-visual-text');
-
   content.innerHTML = `
     <div class="post-visual-text-row">
       ${buildFilePreviewMarkup(post)}
+      <div class="post-body">${post.body}</div>
+    </div>
+  `;
+
+} else if (hasVisual && hasText) {
+  // image/video + text, no title
+  content.classList.add('post-layout-visual-text');
+  let previewMarkup = isImageFile
+    ? `<img class="post-image" src="${visualSrc}" alt="">`
+    : buildFilePreviewMarkup(post);
+  content.innerHTML = `
+    <div class="post-visual-text-row">
+      ${previewMarkup}
       <div class="post-body">${post.body}</div>
     </div>
   `;
@@ -2078,7 +2141,11 @@ function buildPostCard(post, user) {
   `;
 } else if (hasVisual) {
   content.classList.add('post-layout-visual');
-  if (isVideoFile || isOtherFile) {
+  if (isVideoFile) {
+    content.innerHTML = buildFilePreviewMarkup(post);
+    // Mark solo video for natural aspect-ratio CSS
+    content.querySelector('.post-file-preview-video')?.classList.add('post-file-preview-video-natural');
+  } else if (isOtherFile) {
     content.innerHTML = buildFilePreviewMarkup(post);
   } else {
     content.innerHTML = `<img class="post-image" src="${visualSrc}" alt="">`;
@@ -2152,13 +2219,30 @@ if (titleEl && titleTrackEl) {
   const previewVideo = content.querySelector('.post-preview-video');
   const muteBtn = content.querySelector('.post-preview-mute-btn');
 
-  if (previewVideo && muteBtn) {
-    muteBtn.textContent = previewVideo.muted ? '▷' : '☐';
+   if (previewVideo && muteBtn) {
+    muteBtn.textContent = '♪'; // starts muted — click to toggle sound
 
+    // Hover to preview; pause when mouse leaves
+    previewVideo.addEventListener('mouseenter', () => previewVideo.play().catch(() => {}));
+    previewVideo.addEventListener('mouseleave', () => { previewVideo.pause(); });
+
+    // Prevent drag-drop placement from accidentally triggering mute
+    muteBtn.addEventListener('mousedown', e => e.stopPropagation());
     muteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       previewVideo.muted = !previewVideo.muted;
-      muteBtn.textContent = previewVideo.muted ? '▷' : '☐';
+      muteBtn.textContent = previewVideo.muted ? '♪' : '⊘';
+    });
+  }
+
+  const dlBtn = content.querySelector('.post-file-preview-download-btn[data-url]');
+  if (dlBtn) {
+    dlBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const a = document.createElement('a');
+      a.href     = dlBtn.dataset.url;
+      a.download = dlBtn.dataset.name || 'file';
+      a.click();
     });
   }
 
@@ -2168,10 +2252,14 @@ if (titleEl && titleTrackEl) {
   if (audioPreview && playBtn) {
     playBtn.textContent = audioPreview.paused ? '▷' : '☐';
 
-    playBtn.addEventListener('click', async (e) => {
+        playBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
 
       try {
+        // Lazy-load src on first click — prevents autoplay on card render
+        if (!audioPreview.src && audioPreview.dataset.src) {
+          audioPreview.src = audioPreview.dataset.src;
+        }
         if (audioPreview.paused) {
           await audioPreview.play();
           playBtn.textContent = '☐';
