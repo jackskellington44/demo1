@@ -7,13 +7,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(__dirname, "index.html"),
-        main: resolve(__dirname, "main.html"),
-      },
-      output: {
-        entryFileNames: (chunk) => {
-          if (chunk.name === "main") return "main/index.js";
-          return "assets/[name]-[hash].js";
-        },
+        main: resolve(__dirname, "main/index.html"),
       },
     },
   },
