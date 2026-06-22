@@ -9,6 +9,12 @@ export default defineConfig({
         index: resolve(__dirname, "index.html"),
         main: resolve(__dirname, "main.html"),
       },
+      output: {
+        entryFileNames: (chunk) => {
+          if (chunk.name === "main") return "main/index.js";
+          return "assets/[name]-[hash].js";
+        },
+      },
     },
   },
 });
