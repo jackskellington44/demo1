@@ -217,7 +217,7 @@ async function handleLogin() {
     });
     if (error) throw error;
 
-    window.location.href = './main.html';
+    window.location.href = './main/';
   } catch (error) {
     console.error('Login error:', error.message);
     alert(`Login failed: ${error.message}`);
@@ -278,7 +278,7 @@ async function handleSignup() {
     }]);
     if (dbErr) throw dbErr;
 
-    window.location.href = './main.html';
+    window.location.href = './main/';
   } catch (error) {
     console.error('Signup error:', error.message);
     alert(`Signup failed: ${error.message}`);
