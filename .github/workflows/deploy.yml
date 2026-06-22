@@ -18,25 +18,179 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
+          path: repo-main
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "npm"
+          cache-dependency-path: repo-main/package-lock.json
 
-      - name: Install dependencies
+      - name: Install dependencies (main)
+        working-directory: repo-main
         run: npm ci
 
-      - name: Build
+      - name: Build main
+        working-directory: repo-main
         run: npm run build
+        env:
+          VITE_BASE: /demo1/
 
+      - name: Copy main build to site root
+        run: |
+          mkdir -p site
+          cp -r repo-main/dist/. site/
+
+      # ---------- snapshot/initial-post-system ----------
+      - name: Checkout snapshot/initial-post-system
+        uses: actions/checkout@v4
+        with:
+          ref: snapshot/initial-post-system
+          path: repo-snap-1
+
+      - name: Install dependencies (snapshot/initial-post-system)
+        working-directory: repo-snap-1
+        run: npm ci
+
+      - name: Build snapshot/initial-post-system
+        working-directory: repo-snap-1
+        run: npx vite build --base /demo1/snapshots/initial-post-system/
+
+      - name: Copy snapshot/initial-post-system build
+        run: |
+          mkdir -p site/snapshots/initial-post-system
+          cp -r repo-snap-1/dist/. site/snapshots/initial-post-system/
+
+      # ---------- snapshot/edit-mode-and-filters ----------
+      - name: Checkout snapshot/edit-mode-and-filters
+        uses: actions/checkout@v4
+        with:
+          ref: snapshot/edit-mode-and-filters
+          path: repo-snap-2
+
+      - name: Install dependencies (snapshot/edit-mode-and-filters)
+        working-directory: repo-snap-2
+        run: npm ci
+
+      - name: Build snapshot/edit-mode-and-filters
+        working-directory: repo-snap-2
+        run: npx vite build --base /demo1/snapshots/edit-mode-and-filters/
+
+      - name: Copy snapshot/edit-mode-and-filters build
+        run: |
+          mkdir -p site/snapshots/edit-mode-and-filters
+          cp -r repo-snap-2/dist/. site/snapshots/edit-mode-and-filters/
+
+      # ---------- snapshot/placement-system ----------
+      - name: Checkout snapshot/placement-system
+        uses: actions/checkout@v4
+        with:
+          ref: snapshot/placement-system
+          path: repo-snap-3
+
+      - name: Install dependencies (snapshot/placement-system)
+        working-directory: repo-snap-3
+        run: npm ci
+
+      - name: Build snapshot/placement-system
+        working-directory: repo-snap-3
+        run: npx vite build --base /demo1/snapshots/placement-system/
+
+      - name: Copy snapshot/placement-system build
+        run: |
+          mkdir -p site/snapshots/placement-system
+          cp -r repo-snap-3/dist/. site/snapshots/placement-system/
+
+      # ---------- snapshot/design-upgrade-01 ----------
+      - name: Checkout snapshot/design-upgrade-01
+        uses: actions/checkout@v4
+        with:
+          ref: snapshot/design-upgrade-01
+          path: repo-snap-4
+
+      - name: Install dependencies (snapshot/design-upgrade-01)
+        working-directory: repo-snap-4
+        run: npm ci
+
+      - name: Build snapshot/design-upgrade-01
+        working-directory: repo-snap-4
+        run: npx vite build --base /demo1/snapshots/design-upgrade-01/
+
+      - name: Copy snapshot/design-upgrade-01 build
+        run: |
+          mkdir -p site/snapshots/design-upgrade-01
+          cp -r repo-snap-4/dist/. site/snapshots/design-upgrade-01/
+
+      # ---------- snapshot/megastyle-update ----------
+      - name: Checkout snapshot/megastyle-update
+        uses: actions/checkout@v4
+        with:
+          ref: snapshot/megastyle-update
+          path: repo-snap-5
+
+      - name: Install dependencies (snapshot/megastyle-update)
+        working-directory: repo-snap-5
+        run: npm ci
+
+      - name: Build snapshot/megastyle-update
+        working-directory: repo-snap-5
+        run: npx vite build --base /demo1/snapshots/megastyle-update/
+
+      - name: Copy snapshot/megastyle-update build
+        run: |
+          mkdir -p site/snapshots/megastyle-update
+          cp -r repo-snap-5/dist/. site/snapshots/megastyle-update/
+
+      # ---------- snapshot/pre-music ----------
+      - name: Checkout snapshot/pre-music
+        uses: actions/checkout@v4
+        with:
+          ref: snapshot/pre-music
+          path: repo-snap-6
+
+      - name: Install dependencies (snapshot/pre-music)
+        working-directory: repo-snap-6
+        run: npm ci
+
+      - name: Build snapshot/pre-music
+        working-directory: repo-snap-6
+        run: npx vite build --base /demo1/snapshots/pre-music/
+
+      - name: Copy snapshot/pre-music build
+        run: |
+          mkdir -p site/snapshots/pre-music
+          cp -r repo-snap-6/dist/. site/snapshots/pre-music/
+
+      # ---------- snapshot/final-design ----------
+      - name: Checkout snapshot/final-design
+        uses: actions/checkout@v4
+        with:
+          ref: snapshot/final-design
+          path: repo-snap-7
+
+      - name: Install dependencies (snapshot/final-design)
+        working-directory: repo-snap-7
+        run: npm ci
+
+      - name: Build snapshot/final-design
+        working-directory: repo-snap-7
+        run: npx vite build --base /demo1/snapshots/final-design/
+
+      - name: Copy snapshot/final-design build
+        run: |
+          mkdir -p site/snapshots/final-design
+          cp -r repo-snap-7/dist/. site/snapshots/final-design/
+
+      # ---------- Upload everything ----------
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
 
   deploy:
     environment:
